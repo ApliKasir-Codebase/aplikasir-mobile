@@ -18,6 +18,9 @@ import 'package:provider/provider.dart'; // Impor Provider
 
 // --- Impor Provider Produk ---
 import 'package:aplikasir_mobile/fitur/manage/product/providers/product_provider.dart';
+import 'package:aplikasir_mobile/theme/app_theme.dart';
+import 'package:aplikasir_mobile/utils/ui_utils.dart';
+import 'package:aplikasir_mobile/widgets/common_widgets.dart';
 // Model dan DB Helper tidak diimpor langsung jika semua via provider
 // import 'package:aplikasir_mobile/model/product_model.dart';
 // import 'package:aplikasir_mobile/helper/db_helper.dart';
@@ -61,7 +64,6 @@ class _AddProductScreenState extends State<AddProductScreen> {
   String? _originalImagePathForCropping;
   bool _isSavingCrop = false;
   bool _isSavingProduct = false; // State loading untuk tombol utama
-  bool _imageRemoved = false; // Tracks if the image has been removed
 
   @override
   void initState() {
@@ -125,12 +127,10 @@ class _AddProductScreenState extends State<AddProductScreen> {
       // Biarkan provider atau pemanggil yang handle.
       if (widget.initialImageFile == null ||
           widget.initialImageFile?.path != _newCroppedImageFile?.path) {
-        _newCroppedImageFile!
-            .delete()
-            .catchError((e) {
-              print("Error deleting temp crop file: $e");
-              return _newCroppedImageFile!;
-            });
+        _newCroppedImageFile!.delete().catchError((e) {
+          print("Error deleting temp crop file: $e");
+          return _newCroppedImageFile!;
+        });
       }
     }
   }
@@ -144,7 +144,6 @@ class _AddProductScreenState extends State<AddProductScreen> {
       if (_newCroppedImageFile != widget.initialImageFile)
         _clearTemporaryCroppedFile();
       _newCroppedImageFile = null;
-      _imageRemoved = false;
     });
     try {
       final pickedFile =
@@ -157,7 +156,8 @@ class _AddProductScreenState extends State<AddProductScreen> {
       }
     } catch (e) {
       print("Error picking image: $e");
-      _showErrorSnackbar('Gagal memilih gambar: $e');
+      UIUtils.showCustomSnackbar(context,
+          message: 'Gagal memilih gambar: $e', type: SnackBarType.error);
     }
     if (mounted && Navigator.canPop(context)) {
       Navigator.pop(context);
@@ -195,11 +195,11 @@ class _AddProductScreenState extends State<AddProductScreen> {
         _newCroppedImageFile = file; // Ini adalah file temporary baru
         _isCropping = false;
         _originalImagePathForCropping = null;
-        _imageRemoved = false;
       });
     } catch (e) {
       print("Error cropping: $e");
-      _showErrorSnackbar('Gagal memotong gambar: $e');
+      UIUtils.showCustomSnackbar(context,
+          message: 'Gagal memotong gambar: $e', type: SnackBarType.error);
     } finally {
       if (mounted) setState(() => _isSavingCrop = false);
     }
@@ -213,12 +213,10 @@ class _AddProductScreenState extends State<AddProductScreen> {
         final originalFile = File(_originalImagePathForCropping!);
         originalFile.exists().then((exists) {
           if (exists)
-            originalFile
-                .delete()
-                .catchError((e) {
-                  print("Error deleting original: $e");
-                  return originalFile;
-                });
+            originalFile.delete().catchError((e) {
+              print("Error deleting original: $e");
+              return originalFile;
+            });
         });
         _originalImagePathForCropping = null;
       }
@@ -226,7 +224,6 @@ class _AddProductScreenState extends State<AddProductScreen> {
       // atau null jika tidak ada initial. Ini agar preview kembali ke gambar awal (jika dari scan)
       if (widget.initialImageFile != null) {
         _newCroppedImageFile = widget.initialImageFile;
-        _imageRemoved = false; // Gambar awal tidak jadi dihapus
       } else {
         _newCroppedImageFile = null;
       }
@@ -235,23 +232,11 @@ class _AddProductScreenState extends State<AddProductScreen> {
 
   void _showImageSourceActionSheet(BuildContext context) {
     if (_isCropping || _isSavingProduct) return;
-    showModalBottomSheet(
-        context: context,
-        shape: const RoundedRectangleBorder(
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20.0))),
-        builder: (BuildContext context) {
-          return SafeArea(
-              child: Wrap(children: <Widget>[
-            ListTile(
-                leading: const Icon(Icons.photo_library_outlined),
-                title: const Text('Pilih dari Galeri'),
-                onTap: () => _pickImage(ImageSource.gallery)),
-            ListTile(
-                leading: const Icon(Icons.camera_alt_outlined),
-                title: const Text('Ambil Foto dengan Kamera'),
-                onTap: () => _pickImage(ImageSource.camera)),
-          ]));
-        });
+    UIUtils.showImageSourceActionSheet(
+      context,
+      onGallerySelected: () => _pickImage(ImageSource.gallery),
+      onCameraSelected: () => _pickImage(ImageSource.camera),
+    );
   }
 
   void _removeCurrentImage() {
@@ -260,9 +245,9 @@ class _AddProductScreenState extends State<AddProductScreen> {
       if (_newCroppedImageFile != widget.initialImageFile)
         _clearTemporaryCroppedFile(); // Hapus temp crop jika bukan initial
       _newCroppedImageFile = null; // Preview jadi kosong
-      _imageRemoved = true; // Tandai gambar dihapus
     });
-    _showInfoSnackbar('Gambar dihapus.');
+    UIUtils.showCustomSnackbar(context,
+        message: 'Gambar dihapus.', type: SnackBarType.info);
   }
 
   // --- Logika Simpan Produk (MEMANGGIL PROVIDER) ---
@@ -288,159 +273,263 @@ class _AddProductScreenState extends State<AddProductScreen> {
     if (!mounted) return;
 
     if (savedProduct != null) {
-      _showSuccessSnackbar('Produk baru berhasil ditambahkan!');
+      UIUtils.showCustomSnackbar(context,
+          message: 'Produk baru berhasil ditambahkan!',
+          type: SnackBarType.success);
       // Jika widget.initialImageFile adalah temporary dan sudah dipakai, mungkin perlu dihapus di sini atau oleh pemanggil ProductScreen
       // Namun, karena _newCroppedImageFile yg dikirim, dan provider meng-copy-nya, file asli _newCroppedImageFile bisa dihapus
       // setelah berhasil (jika itu bukan widget.initialImageFile).
       // _clearTemporaryCroppedFile() akan menghapus _newCroppedImageFile JIKA BUKAN initial.
       if (_newCroppedImageFile != null &&
           _newCroppedImageFile != widget.initialImageFile) {
-        _newCroppedImageFile!
-            .delete()
-            .catchError((e) {
-              print("Error deleting final temp add file: $e");
-              return _newCroppedImageFile!;
-            });
+        _newCroppedImageFile!.delete().catchError((e) {
+          print("Error deleting final temp add file: $e");
+          return _newCroppedImageFile!;
+        });
       }
       Navigator.pop(context, true); // Kirim true untuk refresh
     } else {
       // Ambil error message dari provider jika ada
       if (productProvider.errorMessage.isNotEmpty) {
-        _showErrorSnackbar(
-            'Gagal menyimpan produk: ${productProvider.errorMessage}');
+        UIUtils.showCustomSnackbar(context,
+            message: 'Gagal menyimpan produk: ${productProvider.errorMessage}',
+            type: SnackBarType.error);
       } else {
-        _showErrorSnackbar('Gagal menyimpan produk.');
+        UIUtils.showCustomSnackbar(context,
+            message: 'Gagal menyimpan produk.', type: SnackBarType.error);
       }
     }
     setState(() => _isSavingProduct = false);
   }
 
-  void _showErrorSnackbar(String message) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message), backgroundColor: Colors.redAccent));
-  }
+  // Image picker and cropping UI methods (keeping these as they are specific to this screen)
 
-  void _showSuccessSnackbar(String message) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message), backgroundColor: Colors.green));
-  }
-
-  void _showInfoSnackbar(String message) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message), duration: const Duration(seconds: 2)));
-  }
-
-  // --- Widget UI SAMA seperti sebelumnya (_buildTextField, _buildCurrencyField, _buildImagePicker, _buildCroppingUI) ---
-  Widget _buildTextField({
-    required TextEditingController controller,
-    required String label,
-    required String hint,
-    required IconData icon,
-    int maxLines = 1,
-    TextInputType keyboardType = TextInputType.text,
-    List<TextInputFormatter>? inputFormatters,
-    String? Function(String?)? validator,
-  }) {
-    return Padding(
-        padding: const EdgeInsets.only(bottom: 20.0),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(label,
-              style: GoogleFonts.poppins(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  color: Colors.black87)),
-          const SizedBox(height: 8),
-          TextFormField(
-            controller: controller,
-            maxLines: maxLines,
-            keyboardType: keyboardType,
-            inputFormatters: inputFormatters,
-            decoration: InputDecoration(
-              hintText: hint,
-              hintStyle: GoogleFonts.poppins(color: Colors.grey[400]),
-              prefixIcon: Icon(icon, color: Colors.grey[500], size: 20),
-              filled: true,
-              fillColor: Colors.white,
-              contentPadding:
-                  const EdgeInsets.symmetric(vertical: 15.0, horizontal: 15.0),
-              border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10.0),
-                  borderSide: BorderSide(color: Colors.grey[300]!)),
-              enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10.0),
-                  borderSide: BorderSide(color: Colors.grey[350]!)),
-              focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10.0),
-                  borderSide: BorderSide(color: Colors.blue[600]!, width: 1.5)),
-              errorBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10.0),
-                  borderSide: const BorderSide(color: Colors.red, width: 1.0)),
-              focusedErrorBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10.0),
-                  borderSide: const BorderSide(color: Colors.red, width: 1.5)),
+  Widget _buildImageSection() {
+    return Card(
+      elevation: 2,
+      shadowColor: Colors.grey.withOpacity(0.1),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.image_outlined,
+                    color: Colors.grey.shade600, size: 20),
+                const SizedBox(width: 8),
+                Text(
+                  'Gambar Produk',
+                  style: GoogleFonts.poppins(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey.shade800,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade200,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    'Opsional',
+                    style: GoogleFonts.poppins(
+                      fontSize: 10,
+                      color: Colors.grey.shade600,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
             ),
-            style: GoogleFonts.poppins(fontSize: 14),
-            validator: validator,
-            autovalidateMode: AutovalidateMode.onUserInteraction,
-          ),
-        ]));
+            const SizedBox(height: 16),
+            Center(child: _buildImagePicker()),
+          ],
+        ),
+      ),
+    );
   }
 
-  Widget _buildCurrencyField({
-    required TextEditingController controller,
-    required String label,
-    required IconData icon,
-    String? Function(String?)? validator,
-  }) {
-    return Padding(
-        padding: const EdgeInsets.only(bottom: 20.0),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(label,
-              style: GoogleFonts.poppins(
-                  fontSize: 14, fontWeight: FontWeight.w500)),
-          const SizedBox(height: 8),
-          TextFormField(
-            controller: controller,
-            keyboardType: TextInputType.number,
-            inputFormatters: [
-              FilteringTextInputFormatter.digitsOnly,
-              ThousandsSeparatorInputFormatter()
-            ],
-            decoration: InputDecoration(
-              prefixText: 'Rp ',
-              prefixStyle: GoogleFonts.poppins(
-                  color: Colors.grey.shade600, fontSize: 14),
-              hintText: '0',
-              hintStyle: GoogleFonts.poppins(color: Colors.grey[400]),
-              prefixIcon: Icon(icon, color: Colors.grey[500], size: 20),
-              filled: true,
-              fillColor: Colors.white,
-              contentPadding:
-                  const EdgeInsets.symmetric(vertical: 15.0, horizontal: 15.0),
-              border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10.0),
-                  borderSide: BorderSide(color: Colors.grey[300]!)),
-              enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10.0),
-                  borderSide: BorderSide(color: Colors.grey[350]!)),
-              focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10.0),
-                  borderSide: BorderSide(color: Colors.blue[600]!, width: 1.5)),
-              errorBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10.0),
-                  borderSide: const BorderSide(color: Colors.red, width: 1.0)),
-              focusedErrorBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10.0),
-                  borderSide: const BorderSide(color: Colors.red, width: 1.5)),
+  Widget _buildBasicInfoSection() {
+    return Card(
+      elevation: 2,
+      shadowColor: Colors.grey.withOpacity(0.1),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.info_outline, color: Colors.grey.shade600, size: 20),
+                const SizedBox(width: 8),
+                Text(
+                  'Informasi Dasar',
+                  style: GoogleFonts.poppins(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey.shade800,
+                  ),
+                ),
+              ],
             ),
-            style: GoogleFonts.poppins(fontSize: 14),
-            validator: validator,
-            autovalidateMode: AutovalidateMode.onUserInteraction,
+            const SizedBox(height: 20),
+            CommonTextField(
+              controller: _nameController,
+              label: 'Nama Produk',
+              hint: 'Masukkan nama produk',
+              validator: (v) =>
+                  v == null || v.isEmpty ? 'Nama produk wajib diisi' : null,
+            ),
+            CommonTextField(
+              controller: _codeController,
+              label: 'Kode Produk (SKU)',
+              hint: 'Masukkan kode unik produk',
+              validator: (v) =>
+                  v == null || v.isEmpty ? 'Kode produk wajib diisi' : null,
+            ),
+            CommonTextField(
+              controller: _stockController,
+              label: 'Jumlah Stok Awal',
+              hint: '0',
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              validator: (v) {
+                if (v == null || v.isEmpty) return 'Jumlah stok wajib diisi';
+                if (int.tryParse(v) == null) return 'Masukkan angka valid';
+                return null;
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPricingSection() {
+    return Card(
+      elevation: 2,
+      shadowColor: Colors.grey.withOpacity(0.1),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.monetization_on_outlined,
+                    color: Colors.grey.shade600, size: 20),
+                const SizedBox(width: 8),
+                Text(
+                  'Informasi Harga',
+                  style: GoogleFonts.poppins(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey.shade800,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            CommonCurrencyField(
+              controller: _costPriceController,
+              label: 'Harga Modal (Beli)',
+              validator: (v) {
+                if (v == null || v.isEmpty) return 'Harga modal wajib diisi';
+                if (_parseCurrencyInput(v) < 0) return 'Harga tidak valid';
+                return null;
+              },
+            ),
+            CommonCurrencyField(
+              controller: _sellingPriceController,
+              label: 'Harga Jual',
+              validator: (v) {
+                if (v == null || v.isEmpty) return 'Harga jual wajib diisi';
+                final sell = _parseCurrencyInput(v);
+                if (sell < 0) return 'Harga tidak valid';
+                return null;
+              },
+            ),
+            // Profit margin indicator
+            if (_costPriceController.text.isNotEmpty &&
+                _sellingPriceController.text.isNotEmpty)
+              _buildProfitMarginIndicator(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProfitMarginIndicator() {
+    final costPrice = _parseCurrencyInput(_costPriceController.text);
+    final sellingPrice = _parseCurrencyInput(_sellingPriceController.text);
+    final profit = sellingPrice - costPrice;
+    final profitPercentage = costPrice > 0 ? (profit / costPrice) * 100 : 0.0;
+
+    Color profitColor = Colors.grey;
+    IconData profitIcon = Icons.remove;
+
+    if (profit > 0) {
+      profitColor = Colors.green;
+      profitIcon = Icons.trending_up;
+    } else if (profit < 0) {
+      profitColor = Colors.red;
+      profitIcon = Icons.trending_down;
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(top: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: profitColor.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: profitColor.withOpacity(0.3)),
+      ),
+      child: Row(
+        children: [
+          Icon(profitIcon, color: profitColor, size: 20),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Keuntungan',
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    color: Colors.grey.shade600,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Rp ${NumberFormat("#,##0", "id_ID").format(profit)}',
+                  style: GoogleFonts.poppins(
+                    fontSize: 14,
+                    color: profitColor,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
           ),
-        ]));
+          Text(
+            '${profitPercentage.toStringAsFixed(1)}%',
+            style: GoogleFonts.poppins(
+              fontSize: 14,
+              color: profitColor,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildImagePicker() {
@@ -542,122 +631,57 @@ class _AddProductScreenState extends State<AddProductScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // ... (Build method utama sama, hanya fungsi _addProduct yang berubah)
-    // Pastikan untuk menyediakan ProductProvider di atas screen ini jika belum (misal di ManageScreen atau ProductScreen saat navigasi)
     return PopScope(
       canPop: !_isCropping && !_isSavingProduct && !_isSavingCrop,
-      onPopInvoked: (didPop) {
+      onPopInvokedWithResult: (didPop, result) {
         if (!didPop && _isCropping) _cancelCrop();
       },
       child: Scaffold(
-        backgroundColor: const Color(0xFFF7F8FC),
+        backgroundColor: AppTheme.screenBackgroundColor,
         appBar: AppBar(
-          title: Text(_isCropping ? 'Potong Gambar' : 'Tambah Produk Baru',
+          title: Text(_isCropping ? 'Potong Gambar' : 'Tambah Produk',
               style: GoogleFonts.poppins(
-                  fontWeight: FontWeight.w600, color: Colors.blue.shade800)),
+                  color: Colors.blue.shade800,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 22)),
           backgroundColor: Colors.white,
-          surfaceTintColor: Colors.white,
+          foregroundColor: Colors.blue.shade800,
           shadowColor: Colors.black26,
-          iconTheme: IconThemeData(color: Colors.blue.shade700),
+          surfaceTintColor: Colors.white,
           elevation: 0.5,
-          centerTitle: true,
-          scrolledUnderElevation: 0,
+          systemOverlayStyle: SystemUiOverlayStyle.dark,
           automaticallyImplyLeading: !_isCropping && !_isSavingProduct,
+          iconTheme: IconThemeData(color: Colors.blue.shade700),
+          centerTitle: true,
           leading: _isCropping || _isSavingProduct ? Container() : null,
+          actions: [
+            UIUtils.buildGradientSaveButton(
+              onPressed: (_isSavingProduct || _isCropping) ? null : _addProduct,
+              isLoading: _isSavingProduct,
+              text: 'Simpan',
+              loadingText: 'Menyimpan...',
+            ),
+          ],
         ),
         body: SafeArea(
             child: Stack(children: [
           SingleChildScrollView(
-              padding: const EdgeInsets.all(24.0),
+              padding: const EdgeInsets.all(20.0),
               child: Form(
                   key: _formKey,
                   child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        _buildImagePicker(),
-                        const SizedBox(height: 30),
-                        _buildTextField(
-                            controller: _nameController,
-                            label: 'Nama Produk',
-                            hint: 'Masukkan nama produk',
-                            icon: Icons.label_outline,
-                            validator: (v) => v == null || v.isEmpty
-                                ? 'Nama produk wajib diisi'
-                                : null),
-                        _buildTextField(
-                            controller: _codeController,
-                            label: 'Kode Produk (SKU)',
-                            hint: 'Masukkan kode unik produk',
-                            icon: Icons.qr_code_2_outlined,
-                            validator: (v) => v == null || v.isEmpty
-                                ? 'Kode produk wajib diisi'
-                                : null),
-                        _buildTextField(
-                            controller: _stockController,
-                            label: 'Jumlah Stok Awal',
-                            hint: '0',
-                            icon: Icons.inventory_2_outlined,
-                            keyboardType: TextInputType.number,
-                            inputFormatters: [
-                              FilteringTextInputFormatter.digitsOnly
-                            ],
-                            validator: (v) {
-                              if (v == null || v.isEmpty)
-                                return 'Jumlah stok wajib diisi';
-                              if (int.tryParse(v) == null)
-                                return 'Masukkan angka valid';
-                              return null;
-                            }),
-                        _buildCurrencyField(
-                            controller: _costPriceController,
-                            label: 'Harga Modal (Beli)',
-                            icon: Icons.attach_money,
-                            validator: (v) {
-                              if (v == null || v.isEmpty)
-                                return 'Harga modal wajib diisi';
-                              if (_parseCurrencyInput(v) < 0)
-                                return 'Harga tidak valid';
-                              return null;
-                            }),
-                        _buildCurrencyField(
-                            controller: _sellingPriceController,
-                            label: 'Harga Jual',
-                            icon: Icons.sell_outlined,
-                            validator: (v) {
-                              if (v == null || v.isEmpty)
-                                return 'Harga jual wajib diisi';
-                              final sell = _parseCurrencyInput(v);
-                              if (sell < 0) return 'Harga tidak valid';
-                              return null;
-                            }),
-                        const SizedBox(height: 35),
-                        ElevatedButton.icon(
-                          onPressed: _isSavingProduct || _isCropping
-                              ? null
-                              : _addProduct,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.blue.shade700,
-                            foregroundColor: Colors.white,
-                            minimumSize: const Size(double.infinity, 50),
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10)),
-                            disabledBackgroundColor:
-                                Colors.blue[200]?.withOpacity(0.7),
-                            elevation: 3,
-                          ),
-                          icon: _isSavingProduct
-                              ? Container()
-                              : const Icon(Icons.add_circle_outline, size: 20),
-                          label: _isSavingProduct
-                              ? const SizedBox(
-                                  height: 20,
-                                  width: 20,
-                                  child: CircularProgressIndicator(
-                                      strokeWidth: 2, color: Colors.white))
-                              : Text('Tambah Produk',
-                                  style: GoogleFonts.poppins(
-                                      fontWeight: FontWeight.w600)),
-                        ),
+                        // Image section
+                        _buildImageSection(),
+                        const SizedBox(height: 24),
+
+                        // Basic information section
+                        _buildBasicInfoSection(),
+                        const SizedBox(height: 20),
+
+                        // Pricing section
+                        _buildPricingSection(), // Extra space for floating save button
                       ]))),
           if (_isCropping) _buildCroppingUI(),
           if (_isSavingCrop)

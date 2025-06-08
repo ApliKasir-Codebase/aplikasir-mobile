@@ -3,10 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:google_fonts/google_fonts.dart'; // Impor GoogleFonts
+import 'package:provider/provider.dart';
 
 import 'fitur/onboarding/onboarding_screen.dart';
 import 'package:aplikasir_mobile/fitur/homepage/homepage_screen.dart';
 import 'package:aplikasir_mobile/fitur/login/screens/login_screen.dart';
+import 'fitur/homepage/providers/homepage_provider.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -14,7 +16,8 @@ Future<void> main() async {
   final SharedPreferences prefs = await SharedPreferences.getInstance();
   final bool isLoggedIn = prefs.getBool('isLoggedIn') ?? false;
   final int loggedInUserId = prefs.getInt('loggedInUserId') ?? -1;
-  final bool onboardingCompleted = prefs.getBool('onboardingCompleted') ?? false;
+  final bool onboardingCompleted =
+      prefs.getBool('onboardingCompleted') ?? false;
 
   Widget initialScreen;
   if (!onboardingCompleted) {
@@ -25,7 +28,17 @@ Future<void> main() async {
     initialScreen = const LoginScreen();
   }
 
-  runApp(MyApp(initialScreen: initialScreen));
+  runApp(
+    MultiProvider(
+      providers: [
+        if (isLoggedIn && loggedInUserId != -1)
+          ChangeNotifierProvider<HomepageProvider>(
+            create: (_) => HomepageProvider(userId: loggedInUserId),
+          ),
+      ],
+      child: MyApp(initialScreen: initialScreen),
+    ),
+  );
 }
 
 class MyApp extends StatefulWidget {
@@ -40,7 +53,8 @@ class MyApp extends StatefulWidget {
 class _MyAppState extends State<MyApp> {
   bool _isDateFormattingInitialized = false;
   bool _initializationError = false;
-  String _initializationErrorMessage = ''; // Untuk menyimpan pesan error spesifik
+  String _initializationErrorMessage =
+      ''; // Untuk menyimpan pesan error spesifik
 
   @override
   void initState() {
@@ -51,7 +65,7 @@ class _MyAppState extends State<MyApp> {
   Future<void> _initializeDependencies() async {
     try {
       print("Initializing date formatting...");
-      await initializeDateFormatting('id_ID', null); // null untuk path data default
+      await initializeDateFormatting('id_ID', null);
       print("Date formatting initialized successfully.");
       if (mounted) {
         setState(() {
@@ -63,7 +77,8 @@ class _MyAppState extends State<MyApp> {
       if (mounted) {
         setState(() {
           _initializationError = true;
-          _initializationErrorMessage = "Gagal menginisialisasi format tanggal: ${e.toString()}";
+          _initializationErrorMessage =
+              "Gagal menginisialisasi format tanggal: ${e.toString()}";
         });
       }
     }
@@ -81,12 +96,14 @@ class _MyAppState extends State<MyApp> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.blue.shade700),
+                  valueColor:
+                      AlwaysStoppedAnimation<Color>(Colors.blue.shade700),
                 ),
                 const SizedBox(height: 20),
                 Text(
                   "Memuat aplikasi...",
-                  style: GoogleFonts.poppins(fontSize: 16, color: Colors.grey.shade700),
+                  style: GoogleFonts.poppins(
+                      fontSize: 16, color: Colors.grey.shade700),
                 ),
               ],
             ),
@@ -105,11 +122,15 @@ class _MyAppState extends State<MyApp> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.error_outline_rounded, color: Colors.red.shade400, size: 60),
+                  Icon(Icons.error_outline_rounded,
+                      color: Colors.red.shade400, size: 60),
                   const SizedBox(height: 16),
                   Text(
                     "Terjadi Kesalahan",
-                    style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.w600, color: Colors.red.shade700),
+                    style: GoogleFonts.poppins(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.red.shade700),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 8),
@@ -117,15 +138,18 @@ class _MyAppState extends State<MyApp> {
                     _initializationErrorMessage.isNotEmpty
                         ? _initializationErrorMessage
                         : "Tidak dapat memulai aplikasi. Silakan coba lagi nanti.",
-                    style: GoogleFonts.poppins(fontSize: 14, color: Colors.grey.shade600),
+                    style: GoogleFonts.poppins(
+                        fontSize: 14, color: Colors.grey.shade600),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 20),
-                  ElevatedButton.icon( // Tombol coba lagi (opsional)
+                  ElevatedButton.icon(
+                    // Tombol coba lagi (opsional)
                     icon: const Icon(Icons.refresh),
                     label: const Text("Coba Lagi"),
                     onPressed: () {
-                      setState(() { // Reset state dan coba inisialisasi lagi
+                      setState(() {
+                        // Reset state dan coba inisialisasi lagi
                         _isDateFormattingInitialized = false;
                         _initializationError = false;
                         _initializationErrorMessage = '';
@@ -162,17 +186,22 @@ class _MyAppState extends State<MyApp> {
           Theme.of(context).textTheme,
         ).copyWith(
           // Kustomisasi style teks tertentu jika perlu
-          titleLarge: GoogleFonts.poppins(fontSize: 22.0, fontWeight: FontWeight.w600),
-          titleMedium: GoogleFonts.poppins(fontSize: 18.0, fontWeight: FontWeight.w500),
+          titleLarge:
+              GoogleFonts.poppins(fontSize: 22.0, fontWeight: FontWeight.w600),
+          titleMedium:
+              GoogleFonts.poppins(fontSize: 18.0, fontWeight: FontWeight.w500),
           bodyMedium: GoogleFonts.poppins(fontSize: 14.0),
-          labelLarge: GoogleFonts.poppins(fontSize: 15.0, fontWeight: FontWeight.w600), // Untuk teks tombol
+          labelLarge: GoogleFonts.poppins(
+              fontSize: 15.0, fontWeight: FontWeight.w600), // Untuk teks tombol
         ),
         appBarTheme: AppBarTheme(
           elevation: 0.8, // Shadow yang lebih halus
           backgroundColor: Colors.white,
           foregroundColor: Colors.blue.shade800, // Untuk ikon dan judul default
-          surfaceTintColor: Colors.white, // Mencegah perubahan warna saat scroll di M3
-          iconTheme: IconThemeData(color: Colors.blue.shade700), // Warna ikon back, dll.
+          surfaceTintColor:
+              Colors.white, // Mencegah perubahan warna saat scroll di M3
+          iconTheme: IconThemeData(
+              color: Colors.blue.shade700), // Warna ikon back, dll.
           titleTextStyle: GoogleFonts.poppins(
             color: Colors.blue.shade800,
             fontSize: 18,
@@ -185,31 +214,38 @@ class _MyAppState extends State<MyApp> {
             backgroundColor: Colors.blue.shade700,
             foregroundColor: Colors.white,
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-            textStyle: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.w600),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            textStyle:
+                GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.w600),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             elevation: 2,
           ),
         ),
-        outlinedButtonTheme: OutlinedButtonThemeData( // Style default OutlinedButton
-          style: OutlinedButton.styleFrom(
-            foregroundColor: Colors.blue.shade700,
-            side: BorderSide(color: Colors.blue.shade700.withOpacity(0.7), width: 1.5),
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-            textStyle: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.w500),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          )
-        ),
-        textButtonTheme: TextButtonThemeData( // Style default TextButton
-          style: TextButton.styleFrom(
-            foregroundColor: Colors.blue.shade700,
-            textStyle: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w500),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          )
-        ),
+        outlinedButtonTheme: OutlinedButtonThemeData(
+            // Style default OutlinedButton
+            style: OutlinedButton.styleFrom(
+          foregroundColor: Colors.blue.shade700,
+          side: BorderSide(
+              color: Colors.blue.shade700.withOpacity(0.7), width: 1.5),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+          textStyle:
+              GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.w500),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        )),
+        textButtonTheme: TextButtonThemeData(
+            // Style default TextButton
+            style: TextButton.styleFrom(
+          foregroundColor: Colors.blue.shade700,
+          textStyle:
+              GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w500),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        )),
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
           fillColor: Colors.white,
-          contentPadding: const EdgeInsets.symmetric(vertical: 15.0, horizontal: 15.0),
+          contentPadding:
+              const EdgeInsets.symmetric(vertical: 15.0, horizontal: 15.0),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10.0),
             borderSide: BorderSide(color: Colors.grey.shade300),
@@ -230,39 +266,51 @@ class _MyAppState extends State<MyApp> {
             borderRadius: BorderRadius.circular(10.0),
             borderSide: BorderSide(color: Colors.red.shade600, width: 1.5),
           ),
-          labelStyle: GoogleFonts.poppins(color: Colors.grey.shade700, fontSize: 14),
-          hintStyle: GoogleFonts.poppins(color: Colors.grey.shade500, fontSize: 14),
+          labelStyle:
+              GoogleFonts.poppins(color: Colors.grey.shade700, fontSize: 14),
+          hintStyle:
+              GoogleFonts.poppins(color: Colors.grey.shade500, fontSize: 14),
           prefixIconColor: Colors.grey.shade600,
           suffixIconColor: Colors.grey.shade600,
-          errorStyle: GoogleFonts.poppins(fontSize: 12, color: Colors.red.shade700),
+          errorStyle:
+              GoogleFonts.poppins(fontSize: 12, color: Colors.red.shade700),
         ),
-        cardTheme: CardTheme( // Style default Card
+        cardTheme: CardTheme(
+            // Style default Card
             elevation: 1.5,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             color: Colors.white,
             surfaceTintColor: Colors.white,
-            margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 0) // Margin default kartu
-        ),
-        floatingActionButtonTheme: FloatingActionButtonThemeData( // Style default FAB
-          backgroundColor: Colors.blue.shade700,
-          foregroundColor: Colors.white,
-          elevation: 4,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)) // Bentuk FAB
-        ),
-        dialogTheme: DialogTheme( // Style default Dialog
+            margin: const EdgeInsets.symmetric(
+                vertical: 6, horizontal: 0) // Margin default kartu
+            ),
+        floatingActionButtonTheme: FloatingActionButtonThemeData(
+            // Style default FAB
+            backgroundColor: Colors.blue.shade700,
+            foregroundColor: Colors.white,
+            elevation: 4,
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16)) // Bentuk FAB
+            ),
+        dialogTheme: DialogTheme(
+            // Style default Dialog
             backgroundColor: Colors.white,
             surfaceTintColor: Colors.white,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-            titleTextStyle: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.black87),
-            contentTextStyle: GoogleFonts.poppins(fontSize: 14, color: Colors.grey.shade700)
-        ),
-        bottomSheetTheme: BottomSheetThemeData( // Style default BottomSheet
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+            titleTextStyle: GoogleFonts.poppins(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: Colors.black87),
+            contentTextStyle:
+                GoogleFonts.poppins(fontSize: 14, color: Colors.grey.shade700)),
+        bottomSheetTheme: BottomSheetThemeData(
+            // Style default BottomSheet
             backgroundColor: Colors.white,
             surfaceTintColor: Colors.white,
             shape: const RoundedRectangleBorder(
-                borderRadius: BorderRadius.vertical(top: Radius.circular(20))
-            )
-        ),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(20)))),
         useMaterial3: true,
       ),
       home: widget.initialScreen,

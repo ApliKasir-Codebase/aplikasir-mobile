@@ -22,7 +22,8 @@ class ProfileProvider extends ChangeNotifier {
   String? _successMessage;
 
   // Untuk Edit Profile
-  File? _newTempProfileImageFile; // File temporary hasil picker/cropper di EditProfileScreen
+  File?
+      _newTempProfileImageFile; // File temporary hasil picker/cropper di EditProfileScreen
   bool _isUpdatingProfile = false;
 
   // Getters
@@ -49,8 +50,18 @@ class ProfileProvider extends ChangeNotifier {
     notifyListeners();
     try {
       _currentUser = await _dbHelper.getUserById(userId);
+
       if (_currentUser == null) {
-        _errorMessage = "Data pengguna tidak ditemukan.";
+        // Fallback: Try to load basic user info from SharedPreferences
+        print(
+            "ProfileProvider: User not found in database, trying SharedPreferences fallback");
+        await _loadUserFromSharedPreferences();
+
+        if (_currentUser == null) {
+          _errorMessage = "Data pengguna tidak ditemukan. Silakan login ulang.";
+          print(
+              "ProfileProvider: User not found in database or SharedPreferences");
+        }
       }
     } catch (e) {
       _errorMessage = "Gagal memuat data pengguna: ${e.toString()}";
@@ -61,18 +72,56 @@ class ProfileProvider extends ChangeNotifier {
     }
   }
 
+  // Fallback method to load basic user info from SharedPreferences
+  Future<void> _loadUserFromSharedPreferences() async {
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      final userName = prefs.getString('userName');
+      final userEmail = prefs.getString('userEmail');
+
+      if (userName != null && userEmail != null) {
+        _currentUser = User(
+          id: userId,
+          name: userName,
+          email: userEmail,
+          phoneNumber: '', // Not available in SharedPreferences
+          storeName: '', // Not available in SharedPreferences
+          storeAddress: '', // Not available in SharedPreferences
+          passwordHash: '', // Never stored in SharedPreferences
+          profileImagePath: null,
+          createdAt: null,
+          updatedAt: DateTime.now(),
+        );
+
+        // Save this basic user data to the database for future use
+        try {
+          await _dbHelper.insertOrReplaceUser(_currentUser!);
+        } catch (dbError) {
+          print(
+              "ProfileProvider: Warning - Could not save user to database: $dbError");
+        }
+      }
+    } catch (e) {
+      print("ProfileProvider: Error loading from SharedPreferences: $e");
+    }
+  }
+
   // Untuk EditProfileScreen: memilih gambar dari galeri/kamera
   Future<File?> pickImageForEdit(ImageSource source) async {
     // Hapus file temporary lama jika ada
-    if (_newTempProfileImageFile != null && await _newTempProfileImageFile!.exists()) {
+    if (_newTempProfileImageFile != null &&
+        await _newTempProfileImageFile!.exists()) {
       try {
         await _newTempProfileImageFile!.delete();
-      } catch (e) { print("Error deleting old temp image: $e");}
+      } catch (e) {
+        print("Error deleting old temp image: $e");
+      }
     }
     _newTempProfileImageFile = null;
 
     try {
-      final pickedFile = await ImagePicker().pickImage(source: source, imageQuality: 80);
+      final pickedFile =
+          await ImagePicker().pickImage(source: source, imageQuality: 80);
       if (pickedFile != null) {
         _newTempProfileImageFile = File(pickedFile.path);
         notifyListeners(); // Untuk update UI preview di EditProfileScreen
@@ -89,10 +138,14 @@ class ProfileProvider extends ChangeNotifier {
   // Untuk EditProfileScreen: mengeset file hasil crop sebagai temporary image
   Future<void> setNewCroppedImage(File? croppedFile) async {
     // Hapus file temporary lama (hasil picker) jika ada dan beda dari file crop
-    if (_newTempProfileImageFile != null && _newTempProfileImageFile != croppedFile && await _newTempProfileImageFile!.exists()) {
-       try {
+    if (_newTempProfileImageFile != null &&
+        _newTempProfileImageFile != croppedFile &&
+        await _newTempProfileImageFile!.exists()) {
+      try {
         _newTempProfileImageFile!.delete();
-      } catch (e) { print("Error deleting picker temp image after crop: $e");}
+      } catch (e) {
+        print("Error deleting picker temp image after crop: $e");
+      }
     }
     _newTempProfileImageFile = croppedFile;
     notifyListeners(); // Update UI preview di EditProfileScreen
@@ -100,10 +153,13 @@ class ProfileProvider extends ChangeNotifier {
 
   // Untuk EditProfileScreen: membersihkan pilihan gambar temporary
   void clearTemporaryImage() {
-    if (_newTempProfileImageFile != null && _newTempProfileImageFile!.existsSync()) {
+    if (_newTempProfileImageFile != null &&
+        _newTempProfileImageFile!.existsSync()) {
       try {
         _newTempProfileImageFile!.delete();
-      } catch (e) { print("Error deleting temp image on clear: $e");}
+      } catch (e) {
+        print("Error deleting temp image on clear: $e");
+      }
     }
     _newTempProfileImageFile = null;
     notifyListeners();
@@ -116,8 +172,10 @@ class ProfileProvider extends ChangeNotifier {
     required String storeName,
     required String storeAddress,
     String? newPassword, // Password baru, bisa null jika tidak diubah
-    File? newProfileImage, // File BARU dari EditProfileScreen (sudah di-crop jika perlu)
-    bool removeCurrentImage = false, // Flag jika user ingin menghapus gambar profil
+    File?
+        newProfileImage, // File BARU dari EditProfileScreen (sudah di-crop jika perlu)
+    bool removeCurrentImage =
+        false, // Flag jika user ingin menghapus gambar profil
   }) async {
     if (_currentUser == null) {
       _errorMessage = "Tidak ada data pengguna untuk diperbarui.";
@@ -148,24 +206,27 @@ class ProfileProvider extends ChangeNotifier {
       } else if (newProfileImage != null) {
         // Ada gambar baru, simpan ke lokasi permanen
         final documentsDir = await getApplicationDocumentsDirectory();
-        final imagesDir = Directory(p.join(documentsDir.path, 'profile_images'));
+        final imagesDir =
+            Directory(p.join(documentsDir.path, 'profile_images'));
         if (!await imagesDir.exists()) await imagesDir.create(recursive: true);
-        
+
         final timestamp = DateTime.now().millisecondsSinceEpoch;
-        final permanentPath = p.join(imagesDir.path, 'profile_${userId}_$timestamp.png');
-        
+        final permanentPath =
+            p.join(imagesDir.path, 'profile_${userId}_$timestamp.png');
+
         final permanentFile = await newProfileImage.copy(permanentPath);
         finalImagePath = permanentFile.path;
 
         // Hapus gambar lama dari storage jika ada dan beda path
-        if (_currentUser!.profileImagePath != null && _currentUser!.profileImagePath != finalImagePath) {
+        if (_currentUser!.profileImagePath != null &&
+            _currentUser!.profileImagePath != finalImagePath) {
           final oldImageFile = File(_currentUser!.profileImagePath!);
           if (await oldImageFile.exists()) await oldImageFile.delete();
         }
         // Hapus file temporary newProfileImage setelah dicopy
-        if (await newProfileImage.exists()){
-            await newProfileImage.delete();
-            _newTempProfileImageFile = null; // Reset di provider
+        if (await newProfileImage.exists()) {
+          await newProfileImage.delete();
+          _newTempProfileImageFile = null; // Reset di provider
         }
       }
 
@@ -186,7 +247,8 @@ class ProfileProvider extends ChangeNotifier {
       final rowsAffected = await _dbHelper.updateUser(updatedUser);
 
       if (rowsAffected > 0) {
-        _currentUser = updatedUser; // Update state pengguna saat ini di provider
+        _currentUser =
+            updatedUser; // Update state pengguna saat ini di provider
         _successMessage = "Profil berhasil diperbarui!";
         _isUpdatingProfile = false;
         notifyListeners();

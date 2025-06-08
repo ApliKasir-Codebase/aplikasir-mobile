@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'receipt_screen.dart'; // Path ke receipt screen
+import 'package:provider/provider.dart';
+import 'package:aplikasir_mobile/fitur/homepage/providers/homepage_provider.dart';
 
 class CheckoutSuccessScreen extends StatefulWidget {
   final int transactionId;
@@ -32,7 +34,8 @@ class _CheckoutSuccessScreenState extends State<CheckoutSuccessScreen> {
     final Color primaryColor = Colors.blue.shade700;
     final Color successColor = Colors.green.shade600;
 
-    return PopScope( // Mencegah back button fisik, navigasi harus via tombol
+    return PopScope(
+      // Mencegah back button fisik, navigasi harus via tombol
       canPop: false,
       child: Scaffold(
         backgroundColor: Colors.white,
@@ -46,20 +49,29 @@ class _CheckoutSuccessScreenState extends State<CheckoutSuccessScreen> {
                 const SizedBox(height: 20),
                 Text(
                   'Transaksi Berhasil!',
-                  style: GoogleFonts.poppins(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.black87),
+                  style: GoogleFonts.poppins(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 10),
                 Text(
                   'Metode Pembayaran: ${widget.paymentMethod}',
-                  style: GoogleFonts.poppins(fontSize: 16, color: Colors.grey.shade700),
+                  style: GoogleFonts.poppins(
+                      fontSize: 16, color: Colors.grey.shade700),
                   textAlign: TextAlign.center,
                 ),
-                if (widget.paymentMethod == 'Tunai' && widget.changeAmount != null && widget.changeAmount! > 0) ...[
+                if (widget.paymentMethod == 'Tunai' &&
+                    widget.changeAmount != null &&
+                    widget.changeAmount! > 0) ...[
                   const SizedBox(height: 15),
                   Text(
                     'Kembalian: ${currencyFormatter.format(widget.changeAmount)}',
-                    style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w500, color: Colors.black87),
+                    style: GoogleFonts.poppins(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.black87),
                     textAlign: TextAlign.center,
                   ),
                 ],
@@ -69,18 +81,22 @@ class _CheckoutSuccessScreenState extends State<CheckoutSuccessScreen> {
                   width: double.infinity,
                   child: ElevatedButton.icon(
                     icon: const Icon(Icons.receipt_long),
-                    label: Text('Lihat Struk', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+                    label: Text('Lihat Struk',
+                        style:
+                            GoogleFonts.poppins(fontWeight: FontWeight.w600)),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: primaryColor,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 13),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
                     ),
                     onPressed: () {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => ReceiptScreen( // Pastikan ReceiptScreen ada di path yg benar
+                          builder: (context) => ReceiptScreen(
+                            // Pastikan ReceiptScreen ada di path yg benar
                             transactionId: widget.transactionId,
                             userId: widget.userId,
                           ),
@@ -94,17 +110,26 @@ class _CheckoutSuccessScreenState extends State<CheckoutSuccessScreen> {
                   width: double.infinity,
                   child: OutlinedButton.icon(
                     icon: const Icon(Icons.home_outlined),
-                    label: Text('Kembali ke Beranda', style: GoogleFonts.poppins()),
+                    label: Text('Kembali ke Beranda',
+                        style: GoogleFonts.poppins()),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: primaryColor,
                       side: BorderSide(color: primaryColor.withOpacity(0.5)),
                       padding: const EdgeInsets.symmetric(vertical: 13),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
                     ),
                     onPressed: () {
                       Navigator.pushAndRemoveUntil(
                         context,
-                        MaterialPageRoute(builder: (context) => HomePage(userId: widget.userId)),
+                        MaterialPageRoute(
+                          builder: (context) =>
+                              ChangeNotifierProvider<HomepageProvider>(
+                            create: (_) =>
+                                HomepageProvider(userId: widget.userId),
+                            child: HomePage(userId: widget.userId),
+                          ),
+                        ),
                         (Route<dynamic> route) => false,
                       );
                     },

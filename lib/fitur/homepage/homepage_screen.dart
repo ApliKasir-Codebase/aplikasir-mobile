@@ -1,9 +1,7 @@
 // lib/fitur/homepage/homepage_screen.dart
-import 'package:aplikasir_mobile/fitur/checkout/providers/checkout_providers.dart';
 import 'package:aplikasir_mobile/model/product_model.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart'; // Import Provider
 
 // --- Impor Layar Tab ---
@@ -11,11 +9,13 @@ import '../history/screens/history_screen.dart'; // Sesuaikan path
 import '../history/providers/history_provider.dart'; // Provider untuk history
 import '../manage/manage_screen.dart'; // Sesuaikan path
 import '../profile/screens/profile_screen.dart'; // Sesuaikan path
-import '../checkout/screens/checkout_screen.dart'; // Sesuaikan path
+import '../manage/product/screens/barcode_scanner_screen.dart';
 
 // --- Impor Provider & Screen Baru ---
 import 'providers/homepage_provider.dart'; // Provider baru
 import 'screens/home_product_list_screen.dart'; // Screen baru untuk list produk
+import 'package:aplikasir_mobile/fitur/checkout/providers/checkout_providers.dart';
+import 'package:aplikasir_mobile/fitur/checkout/screens/checkout_screen.dart';
 
 // Hapus import model/db_helper dari sini jika tidak digunakan langsung
 // import '../../../model/product_model.dart';
@@ -61,7 +61,7 @@ class _HomePageState extends State<HomePage> {
       // Tab 2: Kelola
       ManageScreen(userId: widget.userId),
       // Tab 3: Akun
-      AccountScreen(userId: widget.userId),
+      ProfileScreen(userId: widget.userId),
     ];
 
     _updateScreenOptions(); // Panggil setelah _screenOptions diinisialisasi
@@ -120,13 +120,8 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _updateScreenOptions() {
-    // Tab 0: Beranda (dengan providernya)
-    _screenOptions[0] = ChangeNotifierProvider<HomepageProvider>(
-      // Key diperlukan jika widget tree berubah dan provider harus re-create
-      key: ValueKey('homepageProvider_${widget.userId}'),
-      create: (_) => HomepageProvider(userId: widget.userId),
-      child: const HomeProductListScreen(),
-    );
+    // Tab 0: Beranda (HomeProductListScreen) - using provider from above main.dart
+    _screenOptions[0] = const HomeProductListScreen();
     // Screen lain sudah diinisialisasi di initState
   }
 
@@ -283,36 +278,38 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    // Gunakan context.watch untuk mendapatkan HomepageProvider di widget ini jika diperlukan
-    // Khususnya untuk FAB Checkout
+    // Determine if sheet should show
     final homepageProvider =
         _selectedIndex == 0 ? context.watch<HomepageProvider>() : null;
 
     final double bottomAppBarHeight = MediaQuery.of(context).size.height * 0.1;
-
     return Scaffold(
       appBar: AppBar(
-        title: _selectedIndex == 0
-            ? Image.asset('assets/images/logo_utama.png',
-                height: MediaQuery.of(context).size.width * 0.085,
-                fit: BoxFit.contain)
-            : Text(_appBarTitles[_selectedIndex],
-                style: GoogleFonts.poppins(
-                    color: Colors.blue.shade800,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 24)),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.blue.shade800,
-        elevation: 2.5,
-        shadowColor: Colors.black26,
-        surfaceTintColor: Colors.white,
-        automaticallyImplyLeading: false,
-        titleSpacing: 20.0,
-      ),
+          title: _selectedIndex == 0
+              ? Image.asset('assets/images/logo_utama.png',
+                  height: MediaQuery.of(context).size.width * 0.085,
+                  fit: BoxFit.contain)
+              : Text(_appBarTitles[_selectedIndex],
+                  style: GoogleFonts.poppins(
+                      color: Colors.blue.shade800,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 24)),
+          backgroundColor: Colors.white,
+          foregroundColor: Colors.blue.shade800,
+          elevation: 2.5,
+          shadowColor: Colors.black26,
+          surfaceTintColor: Colors.white,
+          automaticallyImplyLeading: false,
+          centerTitle: false,
+          titleSpacing: 20.0),
       backgroundColor: const Color(0xFFF7F8FC),
-      body: IndexedStack(
-        index: _selectedIndex,
-        children: _screenOptions,
+      body: Stack(
+        children: [
+          IndexedStack(
+            index: _selectedIndex,
+            children: _screenOptions,
+          ),
+        ],
       ),
       floatingActionButton: Stack(
         clipBehavior: Clip.none,
@@ -322,17 +319,40 @@ class _HomePageState extends State<HomePage> {
             left: 30.0,
             child: Visibility(
               visible: _selectedIndex == 0,
-              child: FloatingActionButton.extended(
-                heroTag: 'scanFAB_homepage',
-                onPressed: () {
-                  _showInfoSnackbar('Fitur Scan belum diimplementasikan.');
-                },
-                backgroundColor: Colors.blue.shade600,
-                icon: const Icon(Icons.qr_code_scanner, color: Colors.white),
-                label: Text('Scan',
-                    style: GoogleFonts.poppins(
-                        color: Colors.white, fontWeight: FontWeight.w600)),
-                elevation: 4.0,
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.06),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: FloatingActionButton.extended(
+                  heroTag: 'scanFAB_homepage',
+                  onPressed: () {
+                    // Navigate to barcode scanner in checkout flow
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            const BarcodeScannerScreen(checkoutFlow: true),
+                      ),
+                    );
+                  },
+                  backgroundColor: Colors.blue.shade600,
+                  icon: const Icon(Icons.qr_code_scanner, color: Colors.white),
+                  label: Text('Scan',
+                      style: GoogleFonts.poppins(
+                          color: Colors.white, fontWeight: FontWeight.w600)),
+                  elevation: 0,
+                  extendedPadding: const EdgeInsets.symmetric(horizontal: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
               ),
             ),
           ),
@@ -343,18 +363,34 @@ class _HomePageState extends State<HomePage> {
               // Dapatkan visibility dan label dari provider jika _selectedIndex == 0
               visible: _selectedIndex == 0 &&
                   (homepageProvider?.checkoutCart.isNotEmpty ?? false),
-              child: FloatingActionButton.extended(
-                heroTag: 'checkoutFAB_homepage',
-                onPressed: _proceedToCheckout,
-                backgroundColor: Colors.green.shade600,
-                icon: const Icon(Icons.shopping_cart_checkout,
-                    color: Colors.white),
-                label: Text(
-                    // Dapatkan jumlah item dari provider jika _selectedIndex == 0
-                    'Checkout (${homepageProvider?.totalCartItems ?? 0})',
-                    style: GoogleFonts.poppins(
-                        color: Colors.white, fontWeight: FontWeight.w600)),
-                elevation: 4.0,
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.06),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: FloatingActionButton.extended(
+                  heroTag: 'checkoutFAB_homepage',
+                  onPressed: _proceedToCheckout,
+                  backgroundColor: Colors.green.shade600,
+                  icon: const Icon(Icons.shopping_cart_checkout,
+                      color: Colors.white),
+                  label: Text(
+                      // Dapatkan jumlah item dari provider jika _selectedIndex == 0
+                      'Checkout (${homepageProvider?.totalCartItems ?? 0})',
+                      style: GoogleFonts.poppins(
+                          color: Colors.white, fontWeight: FontWeight.w600)),
+                  elevation: 0,
+                  extendedPadding: const EdgeInsets.symmetric(horizontal: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
               ),
             ),
           ),

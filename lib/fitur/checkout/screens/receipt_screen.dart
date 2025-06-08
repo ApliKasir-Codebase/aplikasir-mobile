@@ -29,8 +29,10 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
   bool _isLoading = true;
   String _errorMessage = '';
 
-  final DateFormat _dateTimeFormatter = DateFormat('dd MMM yyyy, HH:mm', 'id_ID');
-  final NumberFormat currencyFormatter = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
+  final DateFormat _dateTimeFormatter =
+      DateFormat('dd MMM yyyy, HH:mm', 'id_ID');
+  final NumberFormat currencyFormatter =
+      NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
   @override
   void initState() {
@@ -45,22 +47,38 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
       _errorMessage = '';
     });
     try {
-      final currentTransaction = await DatabaseHelper.instance.getTransactionById(widget.transactionId);
-      if (currentTransaction == null) throw Exception('Transaksi #${widget.transactionId} tidak ditemukan.');
+      final currentTransaction = await DatabaseHelper.instance
+          .getTransactionById(widget.transactionId);
+      if (currentTransaction == null)
+        throw Exception('Transaksi #${widget.transactionId} tidak ditemukan.');
       _transaction = currentTransaction;
 
       final user = await DatabaseHelper.instance.getUserById(widget.userId);
       _currentUser = user;
 
-      bool isDebtPaymentReceipt = currentTransaction.metodePembayaran.startsWith('Pembayaran Kredit');
+      // Debug: Print user data untuk troubleshooting
+      if (user != null) {
+        print('Receipt Screen - User loaded: ${user.toString()}');
+        print(
+            'Store Name: "${user.storeName}" | Store Address: "${user.storeAddress}" | Phone: "${user.phoneNumber}"');
+      } else {
+        print('Receipt Screen - User not found for ID: ${widget.userId}');
+      }
 
-      if (isDebtPaymentReceipt && currentTransaction.idTransaksiHutang != null) {
-        _originalDebtTransaction = await DatabaseHelper.instance.getTransactionById(currentTransaction.idTransaksiHutang!);
+      bool isDebtPaymentReceipt =
+          currentTransaction.metodePembayaran.startsWith('Pembayaran Kredit');
+
+      if (isDebtPaymentReceipt &&
+          currentTransaction.idTransaksiHutang != null) {
+        _originalDebtTransaction = await DatabaseHelper.instance
+            .getTransactionById(currentTransaction.idTransaksiHutang!);
         if (_originalDebtTransaction?.idPelanggan != null) {
-          _customer = await DatabaseHelper.instance.getCustomerById(_originalDebtTransaction!.idPelanggan!);
+          _customer = await DatabaseHelper.instance
+              .getCustomerById(_originalDebtTransaction!.idPelanggan!);
         }
       } else if (currentTransaction.idPelanggan != null) {
-        _customer = await DatabaseHelper.instance.getCustomerById(currentTransaction.idPelanggan!);
+        _customer = await DatabaseHelper.instance
+            .getCustomerById(currentTransaction.idPelanggan!);
       }
 
       if (mounted) setState(() => _isLoading = false);
@@ -74,6 +92,61 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
     }
   }
 
+  String _getStoreName() {
+    if (_currentUser?.storeName != null && _currentUser!.storeName.isNotEmpty) {
+      return _currentUser!.storeName;
+    }
+    return 'ApliKasir Store';
+  }
+
+  String _getStoreAddress() {
+    if (_currentUser?.storeAddress != null &&
+        _currentUser!.storeAddress.isNotEmpty) {
+      return _currentUser!.storeAddress;
+    }
+    return 'Alamat tidak tersedia';
+  }
+
+  String _getPhoneNumber() {
+    if (_currentUser?.phoneNumber != null &&
+        _currentUser!.phoneNumber.isNotEmpty) {
+      return _currentUser!.phoneNumber;
+    }
+    return 'Tidak tersedia';
+  }
+
+  double _calculateActualTotal() {
+    if (_transaction == null) return 0.0;
+
+    // Untuk pembayaran hutang, gunakan totalBelanja langsung
+    bool isDebtPaymentReceipt =
+        _transaction!.metodePembayaran.startsWith('Pembayaran Kredit');
+    if (isDebtPaymentReceipt) {
+      return _transaction!.totalBelanja;
+    }
+
+    // Untuk transaksi biasa, hitung total dari detail items
+    double calculatedTotal = 0.0;
+    for (var item in _transaction!.detailItems) {
+      if (!item.containsKey('paid_debt_transaction_id')) {
+        final double price = (item['harga_jual'] ?? 0.0).toDouble();
+        final int qty = (item['quantity'] ?? 0).toInt();
+        final double subtotal = (item['subtotal'] ?? (price * qty)).toDouble();
+        calculatedTotal += subtotal;
+      }
+    }
+
+    // Jika total yang dihitung berbeda significantly dari totalBelanja yang tersimpan,
+    // gunakan yang dihitung dari detail items
+    if (calculatedTotal > 0 &&
+        (calculatedTotal - _transaction!.totalBelanja).abs() > 1.0) {
+      return calculatedTotal;
+    }
+
+    // Jika tidak ada perbedaan significant, gunakan totalBelanja
+    return _transaction!.totalBelanja;
+  }
+
   Widget _buildReceiptItem(Map<String, dynamic> item) {
     // ... (Logika _buildReceiptItem SAMA seperti di file asli Anda) ...
     if (item.containsKey('paid_debt_transaction_id')) {
@@ -82,7 +155,9 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text("Pembayaran Hutang (Ref: #${item['paid_debt_transaction_id'] ?? 'N/A'})", style: GoogleFonts.robotoMono(fontSize: 13)),
+              Text(
+                  "Pembayaran Hutang (Ref: #${item['paid_debt_transaction_id'] ?? 'N/A'})",
+                  style: GoogleFonts.robotoMono(fontSize: 13)),
               // Tidak menampilkan amount di sini karena sudah di total
             ],
           ));
@@ -96,15 +171,26 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(flex: 3, child: Text(name, style: GoogleFonts.robotoMono(fontSize: 13))),
+          Expanded(
+              flex: 3,
+              child: Text(name, style: GoogleFonts.robotoMono(fontSize: 13))),
           Expanded(
             flex: 4,
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(qty.toString(), style: GoogleFonts.robotoMono(fontSize: 13)),
-                Text(currencyFormatter.format(price).replaceAll('Rp', '').trim(), style: GoogleFonts.robotoMono(fontSize: 13)),
-                Text(currencyFormatter.format(subtotal).replaceAll('Rp', '').trim(), style: GoogleFonts.robotoMono(fontSize: 13), textAlign: TextAlign.right),
+                Text(qty.toString(),
+                    style: GoogleFonts.robotoMono(fontSize: 13)),
+                Text(
+                    currencyFormatter.format(price).replaceAll('Rp', '').trim(),
+                    style: GoogleFonts.robotoMono(fontSize: 13)),
+                Text(
+                    currencyFormatter
+                        .format(subtotal)
+                        .replaceAll('Rp', '')
+                        .trim(),
+                    style: GoogleFonts.robotoMono(fontSize: 13),
+                    textAlign: TextAlign.right),
               ],
             ),
           ),
@@ -113,15 +199,26 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
     );
   }
 
-  Widget _buildInfoRow(String label, String value, {bool isTotal = false, TextStyle? valueStyle}) {
+  Widget _buildInfoRow(String label, String value,
+      {bool isTotal = false, TextStyle? valueStyle}) {
     // ... (Logika _buildInfoRow SAMA seperti di file asli Anda) ...
-    final labelStyle = GoogleFonts.poppins(fontSize: isTotal ? 14 : 12, fontWeight: isTotal ? FontWeight.bold : FontWeight.normal, color: Colors.grey.shade700);
-    final finalValueStyle = valueStyle ?? GoogleFonts.poppins(fontSize: isTotal ? 14 : 12, fontWeight: isTotal ? FontWeight.bold : FontWeight.w500, color: Colors.black87);
+    final labelStyle = GoogleFonts.poppins(
+        fontSize: isTotal ? 14 : 12,
+        fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
+        color: Colors.grey.shade700);
+    final finalValueStyle = valueStyle ??
+        GoogleFonts.poppins(
+            fontSize: isTotal ? 14 : 12,
+            fontWeight: isTotal ? FontWeight.bold : FontWeight.w500,
+            color: Colors.black87);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2.5),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [Text(label, style: labelStyle), Text(value, style: finalValueStyle)],
+        children: [
+          Text(label, style: labelStyle),
+          Text(value, style: finalValueStyle)
+        ],
       ),
     );
   }
@@ -129,11 +226,14 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
   @override
   Widget build(BuildContext context) {
     final Color primaryColor = Colors.blue.shade800;
-    final bool isDebtPaymentReceipt = _transaction?.metodePembayaran.startsWith('Pembayaran Kredit') ?? false;
+    final bool isDebtPaymentReceipt =
+        _transaction?.metodePembayaran.startsWith('Pembayaran Kredit') ?? false;
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Struk Transaksi', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: primaryColor)),
+        title: Text('Struk Transaksi',
+            style: GoogleFonts.poppins(
+                fontWeight: FontWeight.bold, color: primaryColor)),
         backgroundColor: Colors.white,
         foregroundColor: primaryColor,
         shadowColor: Colors.black26,
@@ -145,71 +245,168 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _errorMessage.isNotEmpty
-              ? Center(child: Padding(padding: const EdgeInsets.all(16.0), child: Text(_errorMessage, style: GoogleFonts.poppins(color: Colors.red), textAlign: TextAlign.center)))
+              ? Center(
+                  child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Text(_errorMessage,
+                          style: GoogleFonts.poppins(color: Colors.red),
+                          textAlign: TextAlign.center)))
               : _transaction == null
-                  ? Center(child: Text('Data transaksi tidak valid.', style: GoogleFonts.poppins()))
+                  ? Center(
+                      child: Text('Data transaksi tidak valid.',
+                          style: GoogleFonts.poppins()))
                   : SingleChildScrollView(
                       padding: const EdgeInsets.all(16.0),
                       child: Container(
                         padding: const EdgeInsets.all(16.0),
-                        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 8, offset: const Offset(0, 3))]),
+                        decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(8),
+                            boxShadow: [
+                              BoxShadow(
+                                  color: Colors.black.withOpacity(0.08),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 3))
+                            ]),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
                             // Header Struk
-                            Text(_currentUser?.storeName ?? 'Nama Toko Anda', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 18), textAlign: TextAlign.center),
+                            Text(_getStoreName(),
+                                style: GoogleFonts.poppins(
+                                    fontWeight: FontWeight.bold, fontSize: 18),
+                                textAlign: TextAlign.center),
                             const SizedBox(height: 3),
-                            Text(_currentUser?.storeAddress ?? 'Alamat Toko Anda', style: GoogleFonts.poppins(fontSize: 13, color: Colors.grey.shade600), textAlign: TextAlign.center),
+                            Text(_getStoreAddress(),
+                                style: GoogleFonts.poppins(
+                                    fontSize: 13, color: Colors.grey.shade600),
+                                textAlign: TextAlign.center),
                             const SizedBox(height: 5),
-                            Text('Telp: ${_currentUser?.phoneNumber ?? '-'}', style: GoogleFonts.poppins(fontSize: 13, color: Colors.grey.shade600), textAlign: TextAlign.center),
+                            Text('Telp: ${_getPhoneNumber()}',
+                                style: GoogleFonts.poppins(
+                                    fontSize: 13, color: Colors.grey.shade600),
+                                textAlign: TextAlign.center),
                             const SizedBox(height: 15),
                             const Divider(thickness: 1, color: Colors.black54),
                             // Info Transaksi
-                            _buildInfoRow('No. Struk:', "#${_transaction!.id ?? 'N/A'}"),
-                            _buildInfoRow('Tanggal:', _dateTimeFormatter.format(_transaction!.tanggalTransaksi)),
-                            if (_customer != null) _buildInfoRow('Pelanggan:', _customer!.namaPelanggan),
-                            if (isDebtPaymentReceipt && _originalDebtTransaction != null) _buildInfoRow('Ref. Hutang:', '#${_originalDebtTransaction!.id}'),
+                            _buildInfoRow(
+                                'No. Struk:', "#${_transaction!.id ?? 'N/A'}"),
+                            _buildInfoRow(
+                                'Tanggal:',
+                                _dateTimeFormatter
+                                    .format(_transaction!.tanggalTransaksi)),
+                            if (_customer != null)
+                              _buildInfoRow(
+                                  'Pelanggan:', _customer!.namaPelanggan),
+                            if (isDebtPaymentReceipt &&
+                                _originalDebtTransaction != null)
+                              _buildInfoRow('Ref. Hutang:',
+                                  '#${_originalDebtTransaction!.id}'),
                             const SizedBox(height: 12),
                             const Divider(thickness: 1, color: Colors.black54),
                             const SizedBox(height: 12),
                             // Judul Item
-                            Text(isDebtPaymentReceipt ? "DETAIL PEMBAYARAN" : "DETAIL BARANG", style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 14)),
+                            Text(
+                                isDebtPaymentReceipt
+                                    ? "DETAIL PEMBAYARAN"
+                                    : "DETAIL BARANG",
+                                style: GoogleFonts.poppins(
+                                    fontWeight: FontWeight.bold, fontSize: 14)),
                             const SizedBox(height: 8),
                             if (!isDebtPaymentReceipt) // Header Item
                               Padding(
                                 padding: const EdgeInsets.only(bottom: 5.0),
                                 child: Row(
                                   children: [
-                                    Expanded(flex: 3, child: Text('Produk', style: GoogleFonts.robotoMono(fontSize: 12, fontWeight: FontWeight.bold))),
-                                    Expanded(flex: 4, child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                                      Text('Qty', style: GoogleFonts.robotoMono(fontSize: 12, fontWeight: FontWeight.bold)),
-                                      Text('Harga', style: GoogleFonts.robotoMono(fontSize: 12, fontWeight: FontWeight.bold)),
-                                      Text('Subttl', style: GoogleFonts.robotoMono(fontSize: 12, fontWeight: FontWeight.bold), textAlign: TextAlign.right),
-                                    ])),
+                                    Expanded(
+                                        flex: 3,
+                                        child: Text('Produk',
+                                            style: GoogleFonts.robotoMono(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.bold))),
+                                    Expanded(
+                                        flex: 4,
+                                        child: Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              Text('Qty',
+                                                  style: GoogleFonts.robotoMono(
+                                                      fontSize: 12,
+                                                      fontWeight:
+                                                          FontWeight.bold)),
+                                              Text('Harga',
+                                                  style: GoogleFonts.robotoMono(
+                                                      fontSize: 12,
+                                                      fontWeight:
+                                                          FontWeight.bold)),
+                                              Text('Subttl',
+                                                  style: GoogleFonts.robotoMono(
+                                                      fontSize: 12,
+                                                      fontWeight:
+                                                          FontWeight.bold),
+                                                  textAlign: TextAlign.right),
+                                            ])),
                                   ],
                                 ),
                               ),
-                            if (!isDebtPaymentReceipt) const Divider(height: 1, color: Colors.black26),
+                            if (!isDebtPaymentReceipt)
+                              const Divider(height: 1, color: Colors.black26),
                             // List Item
-                            if (_transaction!.detailItems.isEmpty && !isDebtPaymentReceipt)
-                              const Padding(padding: EdgeInsets.symmetric(vertical: 10), child: Center(child: Text('- Tidak ada item detail -')))
+                            if (_transaction!.detailItems.isEmpty &&
+                                !isDebtPaymentReceipt)
+                              const Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 10),
+                                  child: Center(
+                                      child: Text('- Tidak ada item detail -')))
                             else
-                              Column(children: _transaction!.detailItems.map((item) => _buildReceiptItem(item)).toList()),
+                              Column(
+                                  children: _transaction!.detailItems
+                                      .map((item) => _buildReceiptItem(item))
+                                      .toList()),
                             const SizedBox(height: 12),
                             const Divider(thickness: 1, color: Colors.black54),
                             const SizedBox(height: 12),
                             // Total & Pembayaran
-                            _buildInfoRow(isDebtPaymentReceipt ? 'JUMLAH BAYAR' : 'TOTAL', currencyFormatter.format(_transaction!.totalBelanja), isTotal: true),
+                            _buildInfoRow(
+                                isDebtPaymentReceipt ? 'JUMLAH BAYAR' : 'TOTAL',
+                                currencyFormatter
+                                    .format(_calculateActualTotal()),
+                                isTotal: true),
                             const SizedBox(height: 5),
-                            _buildInfoRow('Metode Bayar:', _transaction!.metodePembayaran),
-                            if (_transaction!.metodePembayaran.contains('Tunai')) ...[
-                              if (_transaction!.jumlahBayar != null) _buildInfoRow('Bayar:', currencyFormatter.format(_transaction!.jumlahBayar!)),
-                              if (_transaction!.jumlahKembali != null && _transaction!.jumlahKembali! > 0) _buildInfoRow('Kembali:', currencyFormatter.format(_transaction!.jumlahKembali!)),
+                            _buildInfoRow('Metode Bayar:',
+                                _transaction!.metodePembayaran),
+                            if (_transaction!.metodePembayaran
+                                .contains('Tunai')) ...[
+                              if (_transaction!.jumlahBayar != null)
+                                _buildInfoRow(
+                                    'Bayar:',
+                                    currencyFormatter
+                                        .format(_transaction!.jumlahBayar!)),
+                              if (_transaction!.jumlahKembali != null &&
+                                  _transaction!.jumlahKembali! > 0)
+                                _buildInfoRow(
+                                    'Kembali:',
+                                    currencyFormatter
+                                        .format(_transaction!.jumlahKembali!)),
                             ],
-                            if (!isDebtPaymentReceipt && _transaction!.metodePembayaran == 'Kredit')
-                              _buildInfoRow('Status:', _transaction!.statusPembayaran, valueStyle: TextStyle(fontSize: 12, color: _transaction!.statusPembayaran == 'Lunas' ? Colors.green.shade700 : Colors.orange.shade800, fontWeight: FontWeight.w500)),
+                            if (!isDebtPaymentReceipt &&
+                                _transaction!.metodePembayaran == 'Kredit')
+                              _buildInfoRow(
+                                  'Status:', _transaction!.statusPembayaran,
+                                  valueStyle: TextStyle(
+                                      fontSize: 12,
+                                      color: _transaction!.statusPembayaran ==
+                                              'Lunas'
+                                          ? Colors.green.shade700
+                                          : Colors.orange.shade800,
+                                      fontWeight: FontWeight.w500)),
                             const SizedBox(height: 25),
-                            Center(child: Text('--- Terima Kasih ---', style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey.shade600))),
+                            Center(
+                                child: Text('--- Terima Kasih ---',
+                                    style: GoogleFonts.poppins(
+                                        fontSize: 12,
+                                        color: Colors.grey.shade600))),
                             const SizedBox(height: 10),
                           ],
                         ),

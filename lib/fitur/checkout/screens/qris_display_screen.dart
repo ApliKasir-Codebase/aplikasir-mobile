@@ -1,9 +1,9 @@
 // lib/fitur/checkout/screens/qris_display_screen.dart
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:intl/intl.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:provider/provider.dart'; // Impor Provider
+import 'package:intl/intl.dart';
 
 import 'package:aplikasir_mobile/helper/db_helper.dart';
 import 'package:aplikasir_mobile/model/transaction_model.dart';
@@ -35,7 +35,11 @@ class QrisDisplayScreen extends StatelessWidget {
     // tanpa bergantung pada state dari QrisSetupScreen.
     return ChangeNotifierProvider(
       // userId mungkin tidak krusial untuk QrisProvider di sini jika hanya untuk generate
-      create: (_) => QrisProvider(userId: userId),
+      create: (_) {
+        final provider = QrisProvider(userId: userId);
+        provider.loadSavedQrisTemplate();
+        return provider;
+      },
       child: _QrisDisplayScreenContent(
         totalAmount: totalAmount,
         userId: userId,
@@ -72,65 +76,7 @@ class _QrisDisplayScreenContentState extends State<_QrisDisplayScreenContent> {
       NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
   final Color _primaryColor = Colors.blue.shade700;
 
-  String? _generatedQrDataPayload; // Hasil QR dinamis
-  bool _isQrGenerationLoading = true; // Loading untuk generate QR
-  String? _qrGenerationError;
-
   bool _isProcessingPayment = false; // Loading untuk simpan transaksi
-
-  @override
-  void initState() {
-    super.initState();
-    // Panggil provider untuk memuat template dan generate QR dinamis
-    // Kita lakukan ini di didChangeDependencies atau setelah frame pertama agar provider terinisialisasi
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _generateDynamicQr();
-    });
-  }
-
-  Future<void> _generateDynamicQr() async {
-    if (!mounted) return;
-    setState(() {
-      _isQrGenerationLoading = true;
-      _qrGenerationError = null;
-      _generatedQrDataPayload = null;
-    });
-
-    final qrisProvider = context.read<QrisProvider>();
-    // Pastikan template sudah dimuat oleh provider
-    if (qrisProvider.rawQrisTemplate == null && !qrisProvider.isLoading) {
-      // Jika belum ada, coba load (meskipun provider sudah melakukannya di init)
-      await qrisProvider.loadSavedQrisTemplate();
-    }
-
-    if (qrisProvider.rawQrisTemplate == null) {
-      if (mounted) {
-        setState(() {
-          _qrGenerationError =
-              "Template QRIS belum diatur. Silakan atur di menu Kelola > QRIS.";
-          _isQrGenerationLoading = false;
-        });
-      }
-      return;
-    }
-
-    final dynamicQr =
-        qrisProvider.generateDynamicQrisForDisplay(widget.totalAmount);
-
-    if (mounted) {
-      setState(() {
-        if (dynamicQr != null) {
-          _generatedQrDataPayload = dynamicQr;
-          _qrGenerationError = null;
-        } else {
-          _generatedQrDataPayload = null;
-          _qrGenerationError = qrisProvider.errorMessage ??
-              "Gagal menghasilkan kode QRIS dinamis.";
-        }
-        _isQrGenerationLoading = false;
-      });
-    }
-  }
 
   void _showSnackbar(String message, {bool isError = false}) {
     if (!mounted) return;
@@ -231,9 +177,8 @@ class _QrisDisplayScreenContentState extends State<_QrisDisplayScreenContent> {
 
   @override
   Widget build(BuildContext context) {
-    // Tidak perlu watch provider di sini jika pemanggilan hanya di initState/didChangeDependencies
-    // Kecuali jika ada UI yang bergantung pada perubahan state provider secara live.
-
+    final qrisProvider = context.watch<QrisProvider>();
+    final rawTemplate = qrisProvider.rawQrisTemplate;
     return Scaffold(
       appBar: AppBar(
         title: Text('Pembayaran QRIS',
@@ -275,64 +220,30 @@ class _QrisDisplayScreenContentState extends State<_QrisDisplayScreenContent> {
               height: 250,
               width: 250,
               alignment: Alignment.center,
-              child: _isQrGenerationLoading
-                  ? const Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                          CircularProgressIndicator(),
-                          SizedBox(height: 15),
-                          Text("Memuat QRIS...")
-                        ])
-                  : _qrGenerationError != null
-                      ? Container(
-                          padding: const EdgeInsets.all(15.0),
-                          decoration: BoxDecoration(
-                              border: Border.all(color: Colors.red.shade200),
-                              borderRadius: BorderRadius.circular(8),
-                              color: Colors.red.shade50),
-                          child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.error_outline,
-                                    color: Colors.red.shade700, size: 40),
-                                const SizedBox(height: 10),
-                                Text(_qrGenerationError!,
-                                    style: GoogleFonts.poppins(
-                                        color: Colors.red.shade800,
-                                        fontSize: 14),
-                                    textAlign: TextAlign.center),
-                              ]))
-                      : _generatedQrDataPayload != null
-                          ? Container(
-                              padding: const EdgeInsets.all(15),
-                              decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(12),
-                                  boxShadow: [
-                                    BoxShadow(
-                                        color: Colors.grey.withOpacity(0.3),
-                                        spreadRadius: 1,
-                                        blurRadius: 5,
-                                        offset: const Offset(0, 2))
-                                  ]),
-                              child: QrImageView(
-                                data: _generatedQrDataPayload!,
-                                version: QrVersions.auto,
-                                size: 220.0,
-                                gapless: false,
-                                errorCorrectionLevel: QrErrorCorrectLevel.M,
-                                errorStateBuilder: (cxt, err) => Center(
-                                    child: Text("Gagal membuat QR Code.",
-                                        textAlign: TextAlign.center,
-                                        style: GoogleFonts.poppins(
-                                            color: Colors.red))),
-                              ),
-                            )
-                          : Center(
-                              child: Text(
-                                  "Gagal memuat data QRIS untuk ditampilkan.",
-                                  style: GoogleFonts.poppins(
-                                      color: Colors.orange.shade800))),
+              child: qrisProvider.isLoading
+                  ? const CircularProgressIndicator()
+                  : rawTemplate == null
+                      ? Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.error_outline,
+                                color: Colors.red.shade700, size: 40),
+                            const SizedBox(height: 10),
+                            Text(
+                              "Template QRIS belum diatur. Silakan atur di menu Kelola > QRIS.",
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.poppins(
+                                  color: Colors.red.shade800),
+                            ),
+                          ],
+                        )
+                      : QrImageView(
+                          data: rawTemplate,
+                          version: QrVersions.auto,
+                          size: 220.0,
+                          gapless: false,
+                          errorCorrectionLevel: QrErrorCorrectLevel.M,
+                        ),
             ),
             const SizedBox(height: 30),
             const Spacer(),
@@ -351,18 +262,16 @@ class _QrisDisplayScreenContentState extends State<_QrisDisplayScreenContent> {
                         ? "Memproses..."
                         : "Pembayaran Diterima (Manual)",
                     style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
-                onPressed: _isQrGenerationLoading ||
-                        _qrGenerationError != null ||
-                        _isProcessingPayment ||
-                        _generatedQrDataPayload == null
+                onPressed: qrisProvider.isLoading ||
+                        rawTemplate == null ||
+                        _isProcessingPayment
                     ? null
                     : _confirmManualPayment,
                 style: ElevatedButton.styleFrom(
-                    backgroundColor: (_isQrGenerationLoading ||
-                            _qrGenerationError != null ||
-                            _generatedQrDataPayload == null)
-                        ? Colors.grey
-                        : Colors.green.shade600,
+                    backgroundColor:
+                        (qrisProvider.isLoading || rawTemplate == null)
+                            ? Colors.grey
+                            : Colors.green.shade600,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(

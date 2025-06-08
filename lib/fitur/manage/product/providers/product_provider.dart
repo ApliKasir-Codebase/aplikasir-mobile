@@ -7,12 +7,9 @@ import 'package:image_picker/image_picker.dart';
 import 'package:google_mlkit_barcode_scanning/google_mlkit_barcode_scanning.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
-import 'package:google_fonts/google_fonts.dart'; // Untuk dialog password
 
 import 'package:aplikasir_mobile/model/product_model.dart';
 import 'package:aplikasir_mobile/helper/db_helper.dart';
-import 'package:aplikasir_mobile/model/user_model.dart'; // Untuk User di dialog password
-import 'package:aplikasir_mobile/utils/auth_utils.dart'; // Untuk verifyPassword
 
 // Definisikan FetchedProductData di sini atau impor dari path yang benar
 class FetchedProductData {
@@ -25,8 +22,12 @@ class FetchedProductData {
 class ProductProvider extends ChangeNotifier {
   final int userId;
   final DatabaseHelper _dbHelper = DatabaseHelper.instance;
-  final BarcodeScanner _barcodeScanner =
-      BarcodeScanner(formats: [BarcodeFormat.qrCode, BarcodeFormat.ean13, BarcodeFormat.upca, BarcodeFormat.code128]); // Tambah format lain
+  final BarcodeScanner _barcodeScanner = BarcodeScanner(formats: [
+    BarcodeFormat.qrCode,
+    BarcodeFormat.ean13,
+    BarcodeFormat.upca,
+    BarcodeFormat.code128
+  ]); // Tambah format lain
 
   List<Product> _allProducts = [];
   List<Product> _filteredProducts = [];
@@ -35,17 +36,16 @@ class ProductProvider extends ChangeNotifier {
   bool _sortAscending = true; // Default A-Z by name
   String _searchQuery = '';
   bool _isProcessingBarcode = false;
-  bool _isDialogActionLoading = false; // Untuk loading di dialog
-
+  String _stockFilter = 'all'; // all, low_stock, out_of_stock
   // Getters
   List<Product> get filteredProducts => _filteredProducts;
+  List<Product> get allProducts => _allProducts;
   bool get isLoading => _isLoading;
   String get errorMessage => _errorMessage;
   bool get sortAscending => _sortAscending;
   String get searchQuery => _searchQuery;
   bool get isProcessingBarcode => _isProcessingBarcode;
-  bool get isDialogActionLoading => _isDialogActionLoading;
-
+  String get stockFilter => _stockFilter;
 
   ProductProvider({required this.userId}) {
     loadProducts();
@@ -84,6 +84,60 @@ class ProductProvider extends ChangeNotifier {
     _applyFiltersAndSort();
   }
 
+  void setStockFilter(String filter) {
+    _stockFilter = filter;
+    _applyFiltersAndSort();
+  }
+
+  void setProcessingBarcode(bool processing) {
+    _isProcessingBarcode = processing;
+    notifyListeners();
+  }
+
+  // New method to process barcode data (separated from camera handling)
+  Future<FetchedProductData?> processBarcodeData(String barcodeValue) async {
+    _isProcessingBarcode = true;
+    notifyListeners();
+    try {
+      // Try to fetch product data from API
+      final fetchedApiData = await _fetchProductDataFromApi(barcodeValue);
+      File? downloadedImageFile;
+
+      if (fetchedApiData != null &&
+          fetchedApiData['imageUrl'] != null &&
+          fetchedApiData['imageUrl'].toString().isNotEmpty) {
+        final imageUrl = fetchedApiData['imageUrl'];
+        if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+          final tempFile = await _downloadImage(imageUrl, barcodeValue);
+          if (tempFile != null && await tempFile.exists()) {
+            downloadedImageFile = tempFile;
+          }
+        } else {
+          final localFile = File(imageUrl);
+          if (await localFile.exists()) {
+            downloadedImageFile = localFile;
+          }
+        }
+      }
+
+      return FetchedProductData(
+        name: fetchedApiData?['name'],
+        code: barcodeValue,
+        imageFile: downloadedImageFile,
+      );
+    } catch (e) {
+      _errorMessage = "Error processing barcode: e.toString()}";
+      return FetchedProductData(
+        code: barcodeValue,
+        name: null,
+        imageFile: null,
+      );
+    } finally {
+      _isProcessingBarcode = false;
+      notifyListeners();
+    }
+  }
+
   void _applyFiltersAndSort() {
     List<Product> tempFiltered = List.from(_allProducts);
 
@@ -94,6 +148,14 @@ class ProductProvider extends ChangeNotifier {
         return nameLower.contains(_searchQuery) ||
             codeLower.contains(_searchQuery);
       }).toList();
+    }
+
+    if (_stockFilter == 'low_stock') {
+      tempFiltered =
+          tempFiltered.where((product) => product.jumlahProduk < 10).toList();
+    } else if (_stockFilter == 'out_of_stock') {
+      tempFiltered =
+          tempFiltered.where((product) => product.jumlahProduk == 0).toList();
     }
 
     tempFiltered.sort((a, b) {
@@ -111,8 +173,8 @@ class ProductProvider extends ChangeNotifier {
       {required int userId, int? localProductIdForName}) async {
     try {
       final documentsDir = await getApplicationDocumentsDirectory();
-      final imagesDir =
-          Directory(p.join(documentsDir.path, 'product_images', userId.toString()));
+      final imagesDir = Directory(
+          p.join(documentsDir.path, 'product_images', userId.toString()));
       if (!await imagesDir.exists()) {
         await imagesDir.create(recursive: true);
       }
@@ -150,7 +212,8 @@ class ProductProvider extends ChangeNotifier {
     required int stock,
     required double costPrice,
     required double sellingPrice,
-    File? tempImageFile, // Temporary file from AddProductScreen's picker/cropper
+    File?
+        tempImageFile, // Temporary file from AddProductScreen's picker/cropper
   }) async {
     _isLoading = true; // Bisa juga pakai flag loading lain untuk aksi ini
     _errorMessage = '';
@@ -158,7 +221,12 @@ class ProductProvider extends ChangeNotifier {
 
     String? finalLocalImagePath;
     if (tempImageFile != null) {
-      finalLocalImagePath = await _saveImageToPermanentLocation(tempImageFile, userId: userId);
+      // Debug print
+      print('AddProduct: tempImageFile path: ${tempImageFile.path}');
+      finalLocalImagePath =
+          await _saveImageToPermanentLocation(tempImageFile, userId: userId);
+      // Debug print
+      print('AddProduct: saved image to: $finalLocalImagePath');
       if (finalLocalImagePath == null) {
         _errorMessage = "Gagal menyimpan gambar produk.";
         _isLoading = false;
@@ -187,9 +255,10 @@ class ProductProvider extends ChangeNotifier {
       notifyListeners();
       return newProduct.copyWith(id: productId); // Kembalikan dengan ID lokal
     } catch (e) {
+      print('AddProduct: error inserting product: $e');
       _errorMessage = "Gagal menambah produk: ${e.toString()}";
-      // Rollback gambar jika gagal simpan DB
-      if (finalLocalImagePath != null) await _deleteLocalImage(finalLocalImagePath);
+      if (finalLocalImagePath != null)
+        await _deleteLocalImage(finalLocalImagePath);
       _isLoading = false;
       notifyListeners();
       return null;
@@ -222,7 +291,10 @@ class ProductProvider extends ChangeNotifier {
       if (existingProduct.gambarProduk != null) {
         await _deleteLocalImage(existingProduct.gambarProduk!);
       }
-      finalLocalImagePath = await _saveImageToPermanentLocation(tempNewImageFile, userId: userId, localProductIdForName: existingProduct.id);
+      finalLocalImagePath = await _saveImageToPermanentLocation(
+          tempNewImageFile,
+          userId: userId,
+          localProductIdForName: existingProduct.id);
       if (finalLocalImagePath == null) {
         _errorMessage = "Gagal menyimpan gambar baru.";
         _isLoading = false;
@@ -260,41 +332,25 @@ class ProductProvider extends ChangeNotifier {
   }
 
   Future<bool> deleteProduct(BuildContext context, Product product) async {
+    // Direct delete without password confirmation
     if (product.id == null) {
       _errorMessage = "ID Produk tidak valid untuk dihapus.";
       notifyListeners();
       return false;
     }
-    
-    _isDialogActionLoading = true; // Untuk dialog
-    notifyListeners();
 
-    final bool? passwordConfirmed = await _showPasswordConfirmationDialog(context);
-    
-    _isDialogActionLoading = false; // Selesai dialog
-    notifyListeners();
-
-    if (passwordConfirmed != true) {
-       if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Penghapusan dibatalkan (password salah/batal).'), backgroundColor: Colors.orange),
-          );
-       }
-       return false;
-    }
-
-    _isLoading = true; // Loading untuk proses hapus
+    _isLoading = true;
     _errorMessage = '';
     notifyListeners();
 
     try {
-      // Hapus gambar terkait dari storage lokal
+      // Hapus gambar lokal jika ada
       if (product.gambarProduk != null) {
         await _deleteLocalImage(product.gambarProduk!);
       }
-      // Hapus dari database
+      // Hapus dari database (soft delete)
       await _dbHelper.softDeleteProductLocal(product.id!, userId);
-      await loadProducts(); // Reload list
+      await loadProducts();
       _isLoading = false;
       notifyListeners();
       return true;
@@ -305,107 +361,10 @@ class ProductProvider extends ChangeNotifier {
       return false;
     }
   }
-  
-  // --- Password Confirmation Dialog (Adaptasi dari CustomerProvider) ---
-  Future<bool?> _showPasswordConfirmationDialog(BuildContext context) async {
-    final passwordController = TextEditingController();
-    final formKey = GlobalKey<FormState>();
-    // bool dialogIsLoading = false; // Diganti _isDialogActionLoading
-    bool obscurePassword = true;
-    String? dialogErrorMessage;
-
-    final ShapeBorder dialogShape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(15.0));
-    final EdgeInsets dialogActionsPadding = const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0);
-    TextStyle dialogTitleStyle(BuildContext ctx) => GoogleFonts.poppins(
-      fontWeight: FontWeight.w600, fontSize: 18.0, color: Theme.of(ctx).primaryColorDark,
-    );
-    TextStyle dialogContentStyle(BuildContext ctx) => GoogleFonts.poppins(fontSize: 14.0, color: Colors.grey.shade700, height: 1.4);
-    ButtonStyle cancelButtonStyle(BuildContext ctx) => TextButton.styleFrom(
-      foregroundColor: Colors.grey.shade600,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.0), side: BorderSide(color: Colors.grey.shade300)),
-    );
-    ButtonStyle primaryActionButtonStyle(BuildContext ctx) => ElevatedButton.styleFrom(
-      backgroundColor: Theme.of(ctx).primaryColor, foregroundColor: Colors.white,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.0)), elevation: 2,
-    );
-
-    return await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) {
-        return StatefulBuilder(builder: (context, setDialogState) {
-          return AlertDialog(
-            shape: dialogShape,
-            title: Text('Konfirmasi Password', style: dialogTitleStyle(dialogContext)),
-            actionsPadding: dialogActionsPadding,
-            content: Form(
-              key: formKey,
-              child: Column(mainAxisSize: MainAxisSize.min, children: [
-                Text("Masukkan password Anda untuk melanjutkan:", style: dialogContentStyle(dialogContext)),
-                const SizedBox(height: 15),
-                TextFormField(
-                  controller: passwordController,
-                  obscureText: obscurePassword,
-                  decoration: InputDecoration(
-                    labelText: 'Password', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                    prefixIcon: const Icon(Icons.lock_outline), errorText: dialogErrorMessage,
-                    suffixIcon: IconButton(
-                      icon: Icon(obscurePassword ? Icons.visibility_off : Icons.visibility),
-                      onPressed: () => setDialogState(() => obscurePassword = !obscurePassword),
-                    ),
-                  ),
-                  validator: (v) => (v == null || v.isEmpty) ? 'Password tidak boleh kosong' : null,
-                ),
-              ]),
-            ),
-            actions: [
-              TextButton(
-                onPressed: isDialogActionLoading ? null : () => Navigator.pop(dialogContext, false),
-                style: cancelButtonStyle(dialogContext),
-                child: Text('Batal', style: GoogleFonts.poppins(fontWeight: FontWeight.w500)),
-              ),
-              ElevatedButton(
-                onPressed: isDialogActionLoading ? null : () async {
-                  if (formKey.currentState!.validate()) {
-                    setDialogState(() { _isDialogActionLoading = true; dialogErrorMessage = null; });
-                    notifyListeners(); // Update UI utama untuk loading
-                    bool passwordMatch = await _verifyPassword(passwordController.text);
-                    setDialogState(() => _isDialogActionLoading = false);
-                    notifyListeners();
-                    if (passwordMatch) {
-                      if (dialogContext.mounted) Navigator.pop(dialogContext, true);
-                    } else {
-                      setDialogState(() => dialogErrorMessage = 'Password salah.');
-                    }
-                  }
-                },
-                style: primaryActionButtonStyle(dialogContext),
-                child: isDialogActionLoading
-                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                    : Text('Konfirmasi', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
-              ),
-            ],
-          );
-        });
-      },
-    );
-  }
-
-  Future<bool> _verifyPassword(String enteredPassword) async {
-    try {
-      User? currentUser = await _dbHelper.getUserById(userId);
-      if (currentUser == null) return false;
-      return verifyPassword(enteredPassword, currentUser.passwordHash);
-    } catch (e) {
-      print("Error verifying password in provider: $e");
-      return false;
-    }
-  }
 
   // --- Barcode Scanning Flow ---
-  Future<FetchedProductData?> startBarcodeScanFlow(BuildContext context, ImageSource source) async {
+  Future<FetchedProductData?> startBarcodeScanFlow(
+      BuildContext context, ImageSource source) async {
     _isProcessingBarcode = true;
     notifyListeners();
     FetchedProductData? resultData;
@@ -421,28 +380,37 @@ class ProductProvider extends ChangeNotifier {
       final barcodeValue = await _extractBarcodeFromImage(imageFile);
 
       if (barcodeValue == null) {
-        // Gagal deteksi barcode, langsung return null, UI akan handle
         _isProcessingBarcode = false;
         notifyListeners();
-        return FetchedProductData(code: null, name: null, imageFile: null); // Indikasi gagal scan
+        return FetchedProductData(code: null, name: null, imageFile: null);
       }
-
-      // Barcode terdeteksi, coba fetch
       final fetchedApiData = await _fetchProductDataFromApi(barcodeValue);
       File? downloadedImageFile;
-      if (fetchedApiData != null && fetchedApiData['imageUrl'] != null) {
-          downloadedImageFile = await _downloadImage(fetchedApiData['imageUrl'], barcodeValue);
+      if (fetchedApiData != null &&
+          fetchedApiData['imageUrl'] != null &&
+          fetchedApiData['imageUrl'].toString().isNotEmpty) {
+        final imageUrl = fetchedApiData['imageUrl'];
+        if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+          final tempFile = await _downloadImage(imageUrl, barcodeValue);
+          if (tempFile != null && await tempFile.exists()) {
+            downloadedImageFile = tempFile;
+          }
+        } else {
+          final localFile = File(imageUrl);
+          if (await localFile.exists()) {
+            downloadedImageFile = localFile;
+          }
+        }
       }
 
       resultData = FetchedProductData(
         name: fetchedApiData?['name'],
-        code: barcodeValue, // Selalu isi kode dari hasil scan
-        imageFile: downloadedImageFile, // Ini akan jadi temporary file
+        code: barcodeValue,
+        imageFile: downloadedImageFile,
       );
-
     } catch (e) {
       _errorMessage = "Error saat scan: ${e.toString()}";
-      resultData = FetchedProductData(code: null, name: null, imageFile: null); // Kembalikan data kosong jika error besar
+      resultData = FetchedProductData(code: null, name: null, imageFile: null);
     } finally {
       _isProcessingBarcode = false;
       notifyListeners();
@@ -451,17 +419,22 @@ class ProductProvider extends ChangeNotifier {
   }
 
   Future<String?> _extractBarcodeFromImage(File imageFile) async {
-     try {
+    try {
       final InputImage inputImage = InputImage.fromFilePath(imageFile.path);
-      final List<Barcode> barcodes = await _barcodeScanner.processImage(inputImage);
+      final List<Barcode> barcodes =
+          await _barcodeScanner.processImage(inputImage);
       if (barcodes.isNotEmpty) {
         Barcode? selectedBarcode;
         for (var barcode in barcodes) {
-          if (barcode.format == BarcodeFormat.ean13 || barcode.format == BarcodeFormat.upca) {
-            selectedBarcode = barcode; break;
+          if (barcode.format == BarcodeFormat.ean13 ||
+              barcode.format == BarcodeFormat.upca) {
+            selectedBarcode = barcode;
+            break;
           }
         }
-        selectedBarcode ??= barcodes.firstWhere((b) => b.rawValue != null && b.rawValue!.isNotEmpty, orElse: () => barcodes.first);
+        selectedBarcode ??= barcodes.firstWhere(
+            (b) => b.rawValue != null && b.rawValue!.isNotEmpty,
+            orElse: () => barcodes.first);
         return selectedBarcode.rawValue;
       }
       return null;
@@ -472,34 +445,83 @@ class ProductProvider extends ChangeNotifier {
   }
 
   Future<Map<String, dynamic>?> _fetchProductDataFromApi(String barcode) async {
-    final url = Uri.parse('https://world.openfoodfacts.org/api/v3/product/$barcode.json');
-    try {
-      final response = await http.get(url, headers: {'User-Agent': 'ApliKasir/1.0'});
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        if (data['product'] != null) {
-          final productData = data['product'];
-          return {
-            'name': productData['product_name_en'] ?? productData['product_name'], // Prioritaskan EN
-            'imageUrl': productData['selected_images']?['front']?['display']?['en'],
-          };
-        }
-      }
-      return null;
-    } catch (e) {
-      print("Error fetching from OpenFoodFacts: $e");
-      return null;
+    // Check if product already exists locally first
+    final existingProduct = _allProducts.firstWhere(
+      (product) => product.kodeProduk == barcode,
+      orElse: () => Product(
+        idPengguna: userId,
+        namaProduk: '',
+        kodeProduk: '',
+        jumlahProduk: 0,
+        hargaModal: 0.0,
+        hargaJual: 0.0,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      ),
+    );
+
+    // If product exists locally, return its data
+    if (existingProduct.kodeProduk.isNotEmpty) {
+      return {
+        'name': existingProduct.namaProduk,
+        'imageUrl': existingProduct.gambarProduk,
+        'costPrice': existingProduct.hargaModal,
+        'sellingPrice': existingProduct.hargaJual,
+        'stock': existingProduct.jumlahProduk,
+      };
     }
+
+    // If not found locally, try OpenFoodFacts API as fallback for EAN/UPC codes
+    if (_isValidEanUpc(barcode)) {
+      try {
+        final url = Uri.parse(
+            'https://world.openfoodfacts.org/api/v0/product/$barcode.json');
+        final response = await http.get(
+          url,
+          headers: {'User-Agent': 'ApliKasir/1.0'},
+        );
+
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body);
+          if (data['status'] == 1 && data['product'] != null) {
+            final product = data['product'];
+            return {
+              'name': product['product_name'] ??
+                  'Produk ${barcode.substring(barcode.length - 4)}',
+              'imageUrl': product['image_url'],
+              'costPrice': null, // Will be filled by user
+              'sellingPrice': null, // Will be filled by user
+              'stock': null, // Will be filled by user
+            };
+          }
+        }
+      } catch (e) {
+        print('Error fetching from OpenFoodFacts: $e');
+      }
+    }
+
+    // Return null if no data found anywhere
+    return null;
   }
-  
+
+  bool _isValidEanUpc(String barcode) {
+    // Check if barcode is EAN-13, EAN-8, or UPC-A format
+    if (barcode.length == 13 || barcode.length == 8 || barcode.length == 12) {
+      return RegExp(r'^\d+$').hasMatch(barcode);
+    }
+    return false;
+  }
+
   Future<File?> _downloadImage(String imageUrl, String barcode) async {
     try {
-      final response = await http.get(Uri.parse(imageUrl), headers: {'User-Agent': 'ApliKasir/1.0'});
+      final response = await http
+          .get(Uri.parse(imageUrl), headers: {'User-Agent': 'ApliKasir/1.0'});
       if (response.statusCode == 200) {
         final tempDir = await getTemporaryDirectory();
         // Buat nama file yang lebih unik untuk menghindari konflik jika barcode sama discan berulang kali
         final timestamp = DateTime.now().millisecondsSinceEpoch;
-        final filePath = p.join(tempDir.path, 'temp_dl_prod_img_${barcode}_$timestamp.png');
+        final filePath =
+            p.join(tempDir.path, 'temp_dl_prod_img_${barcode}_$timestamp.png');
         final file = File(filePath);
         await file.writeAsBytes(response.bodyBytes);
         return file;

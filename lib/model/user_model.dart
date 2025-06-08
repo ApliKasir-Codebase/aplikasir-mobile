@@ -122,5 +122,20 @@ class User {
     );
   }
 
-  toMapWithTimestamps() {}
+  Map<String, dynamic> toMapWithTimestamps() {
+    final now = DateTime.now();
+    return {
+      'id': id,
+      'name': name,
+      'email': email,
+      'phoneNumber': phoneNumber,
+      'storeName': storeName,
+      'storeAddress': storeAddress,
+      'profileImagePath': profileImagePath,
+      'created_at': createdAt?.toIso8601String(),
+      'updated_at': updatedAt?.toIso8601String() ?? now.toIso8601String(),
+      'last_sync_time':
+          lastSyncTime?.toIso8601String() ?? now.toIso8601String(),
+    };
+  }
 }

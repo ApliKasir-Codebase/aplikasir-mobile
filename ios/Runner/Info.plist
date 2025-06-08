@@ -45,5 +45,7 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>ApliKasir memerlukan akses kamera untuk scan barcode produk</string>
 </dict>
 </plist>

@@ -81,8 +81,10 @@ class _RegisterScreenContentState extends State<_RegisterScreenContent> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        // RegisterStep2Screen akan mengakses RegisterProvider yang sama dari context
-        builder: (context) => const RegisterStep2Screen(),
+        builder: (context) => ChangeNotifierProvider.value(
+          value: registerProvider,
+          child: RegisterStep2Screen(),
+        ),
       ),
     );
   }

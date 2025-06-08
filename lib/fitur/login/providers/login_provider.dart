@@ -2,7 +2,8 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../services/api_services.dart'; // Sesuaikan path
-import '../../../model/user_model.dart';     // Sesuaikan path
+import '../../../model/user_model.dart'; // Sesuaikan path
+import '../../../helper/db_helper.dart'; // Import DatabaseHelper
 
 class LoginProvider extends ChangeNotifier {
   final ApiService _apiService = ApiService();
@@ -61,14 +62,16 @@ class LoginProvider extends ChangeNotifier {
 
       final String? accessToken = loginResponse['accessToken'] as String?;
       if (accessToken == null || accessToken.isEmpty) {
-        throw Exception(loginResponse['message'] ?? 'Login failed: Missing access token.');
+        throw Exception(
+            loginResponse['message'] ?? 'Login failed: Missing access token.');
       }
 
-      final Map<String, dynamic>? userDataMap = loginResponse['user'] as Map<String, dynamic>?;
+      final Map<String, dynamic>? userDataMap =
+          loginResponse['user'] as Map<String, dynamic>?;
       if (userDataMap == null) {
-        throw Exception(loginResponse['message'] ?? 'Login failed: Missing user data.');
+        throw Exception(
+            loginResponse['message'] ?? 'Login failed: Missing user data.');
       }
-
       _loggedInUser = User.fromMap(userDataMap);
 
       final SharedPreferences prefs = await SharedPreferences.getInstance();
@@ -79,7 +82,20 @@ class LoginProvider extends ChangeNotifier {
         await prefs.setInt('loggedInUserId', _loggedInUser!.id!);
         await prefs.setString('userName', _loggedInUser!.name);
         await prefs.setString('userEmail', _loggedInUser!.email);
-        print('Login successful. Saved userId: ${_loggedInUser!.id} and token.');
+
+        // Save user data to local database for offline access
+        try {
+          final dbHelper = DatabaseHelper.instance;
+          await dbHelper.insertOrReplaceUser(_loggedInUser!);
+          print(
+              'Login successful. Saved userId: ${_loggedInUser!.id} to SharedPreferences and local database.');
+        } catch (dbError) {
+          print('Warning: Failed to save user to local database: $dbError');
+          // Don't fail the login if database save fails
+        }
+
+        print(
+            'Login successful. Saved userId: ${_loggedInUser!.id} and token.');
       } else {
         await prefs.remove('isLoggedIn');
         await prefs.remove('accessToken');

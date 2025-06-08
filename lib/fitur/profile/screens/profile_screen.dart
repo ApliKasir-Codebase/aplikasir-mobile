@@ -120,11 +120,10 @@ class _ProfileScreenContent extends StatelessWidget {
       final result = await Navigator.push(
         context,
         MaterialPageRoute(
-          // EditProfileScreen akan membuat ProfileProvider-nya sendiri atau
-          // kita bisa pass provider yang sudah ada jika EditProfileScreen tidak punya provider sendiri
-          // Untuk kasus ini, EditProfileScreen akan dibuat sebagai StatefulWidget yang mengelola state formnya sendiri
-          // dan memanggil method update di ProfileProvider ini.
-          builder: (_) => EditProfileScreen(initialUser: provider.currentUser!),
+          builder: (_) => ChangeNotifierProvider.value(
+            value: provider, // Pass the existing ProfileProvider instance
+            child: EditProfileScreen(initialUser: provider.currentUser!),
+          ),
         ),
       );
       if (result == true && context.mounted) {
@@ -302,16 +301,32 @@ class _ProfileScreenContent extends StatelessWidget {
                   // Tambahkan tombol refresh jika gagal load awal
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
+                    Icon(Icons.account_circle_outlined,
+                        size: 64, color: Colors.grey.shade400),
+                    const SizedBox(height: 16),
                     Text(
                         profileProvider.errorMessage ??
                             'Gagal memuat data pengguna.',
-                        style:
-                            GoogleFonts.poppins(color: Colors.grey.shade600)),
+                        style: GoogleFonts.poppins(color: Colors.grey.shade600),
+                        textAlign: TextAlign.center),
                     const SizedBox(height: 10),
                     ElevatedButton.icon(
                         onPressed: () => profileProvider.loadUserData(),
                         icon: const Icon(Icons.refresh),
-                        label: const Text("Coba Lagi"))
+                        label: const Text("Coba Lagi"),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue.shade700,
+                          foregroundColor: Colors.white,
+                        )),
+                    const SizedBox(height: 8),
+                    TextButton.icon(
+                        onPressed: () => _showLogoutConfirmationDialog(
+                            context, profileProvider),
+                        icon: const Icon(Icons.logout),
+                        label: const Text("Keluar Akun"),
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.red.shade600,
+                        )),
                   ],
                 ))
               : SingleChildScrollView(

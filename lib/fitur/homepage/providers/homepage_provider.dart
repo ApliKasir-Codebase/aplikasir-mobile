@@ -1,7 +1,5 @@
 // lib/fitur/homepage/providers/homepage_provider.dart
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
-import 'dart:io'; // Untuk File
 
 import '../../../model/product_model.dart';
 import '../../../helper/db_helper.dart';
@@ -24,7 +22,8 @@ class HomepageProvider extends ChangeNotifier {
   bool get sortAscending => _sortAscending;
   Map<int, int> get checkoutCart => _checkoutCart;
 
-  int get totalCartItems => _checkoutCart.values.fold(0, (sum, item) => sum + item);
+  int get totalCartItems =>
+      _checkoutCart.values.fold(0, (sum, item) => sum + item);
 
   List<Product> get productsInCart {
     List<Product> products = [];
@@ -34,7 +33,8 @@ class HomepageProvider extends ChangeNotifier {
         products.add(product);
       } catch (e) {
         // Produk mungkin sudah dihapus, abaikan dari keranjang saat ini
-        print("Product ID $productId not found in all products for cart display.");
+        print(
+            "Product ID $productId not found in all products for cart display.");
       }
     });
     return products;
@@ -50,7 +50,8 @@ class HomepageProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final products = await DatabaseHelper.instance.getProductsByUserId(userId);
+      final products =
+          await DatabaseHelper.instance.getProductsByUserId(userId);
       _homeAllProducts = products;
       _filterAndSortHomeProducts(); // Panggil filter dan sort setelah memuat
     } catch (e) {
@@ -86,7 +87,8 @@ class HomepageProvider extends ChangeNotifier {
 
     // Sorting
     productsToProcess.sort((a, b) {
-      int comparison = a.namaProduk.toLowerCase().compareTo(b.namaProduk.toLowerCase());
+      int comparison =
+          a.namaProduk.toLowerCase().compareTo(b.namaProduk.toLowerCase());
       return _sortAscending ? comparison : -comparison;
     });
 
@@ -94,8 +96,8 @@ class HomepageProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-
-  void updateCheckoutQuantity(int productId, int newQuantity, {required Function(String) showError}) {
+  void updateCheckoutQuantity(int productId, int newQuantity,
+      {required Function(String) showError}) {
     final product = _homeAllProducts.firstWhere((p) => p.id == productId,
         orElse: () => Product(
             idPengguna: -1,
@@ -105,13 +107,15 @@ class HomepageProvider extends ChangeNotifier {
             hargaModal: 0,
             hargaJual: 0));
 
-    if (product.idPengguna == -1) { // Product not found
+    if (product.idPengguna == -1) {
+      // Product not found
       showError('Produk tidak ditemukan.');
       return;
     }
 
     if (newQuantity > product.jumlahProduk) {
-      showError('Stok ${product.namaProduk} tidak mencukupi (tersisa ${product.jumlahProduk}).');
+      showError(
+          'Stok ${product.namaProduk} tidak mencukupi (tersisa ${product.jumlahProduk}).');
       // Kembalikan kuantitas ke stok maksimum jika input melebihi
       // atau biarkan UI tidak mengupdate quantity jika validasi di UI mencegah ini
       return;

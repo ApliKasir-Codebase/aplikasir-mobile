@@ -55,6 +55,10 @@ class ApiService {
       Map<String, String> textData, File? imageFile) async {
     var request = http.MultipartRequest(
         'POST', Uri.parse('${ApiConfig.baseUrl}/auth/register'));
+    // Include default headers except Content-Type for multipart (to preserve boundary)
+    final multipartHeaders = await _getHeaders(includeAuth: false);
+    multipartHeaders.remove('Content-Type');
+    request.headers.addAll(multipartHeaders);
 
     // Tambahkan field teks
     request.fields.addAll(textData);

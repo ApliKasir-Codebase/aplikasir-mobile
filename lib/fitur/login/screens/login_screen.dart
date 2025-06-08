@@ -6,9 +6,10 @@ import 'package:provider/provider.dart'; // Import Provider
 
 // --- Imports for Register & Home ---
 import '../../register/screens/register_step_1.dart'; // Sesuaikan path
-import '../../homepage/homepage_screen.dart';   // Sesuaikan path
+import '../../homepage/homepage_screen.dart'; // Sesuaikan path
+import '../../homepage/providers/homepage_provider.dart'; // Impor HomepageProvider
 // --- Impor Provider ---
-import '../providers/login_provider.dart';   // Sesuaikan path
+import '../providers/login_provider.dart'; // Sesuaikan path
 
 class LoginScreen extends StatelessWidget {
   final String? initialEmail;
@@ -50,47 +51,56 @@ class _LoginScreenContentState extends State<_LoginScreenContent> {
   void _showSuccessSnackbar(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message, style: GoogleFonts.poppins()), backgroundColor: Colors.green),
+      SnackBar(
+          content: Text(message, style: GoogleFonts.poppins()),
+          backgroundColor: Colors.green),
     );
   }
 
   void _showErrorSnackbar(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message, style: GoogleFonts.poppins()), backgroundColor: Colors.redAccent),
+      SnackBar(
+          content: Text(message, style: GoogleFonts.poppins()),
+          backgroundColor: Colors.redAccent),
     );
   }
 
   Future<void> _attemptLogin(LoginProvider provider) async {
-      final success = await provider.login(); // login() di provider sudah handle formKey
-      if (!mounted) return;
+    final success =
+        await provider.login(); // login() di provider sudah handle formKey
+    if (!mounted) return;
 
-      if (success) {
-          final user = provider.loggedInUser;
-          if (user != null && user.id != null) {
-              _showSuccessSnackbar('Login berhasil! Selamat datang ${user.name}.');
-              Navigator.pushAndRemoveUntil(
-                  context,
-                  MaterialPageRoute(builder: (context) => HomePage(userId: user.id!)),
-                  (Route<dynamic> route) => false,
-              );
-          } else {
-             // Ini skenario yang aneh, user null setelah login sukses
-             _showErrorSnackbar('Terjadi kesalahan internal setelah login.');
-          }
+    if (success) {
+      final user = provider.loggedInUser;
+      if (user != null && user.id != null) {
+        _showSuccessSnackbar('Login berhasil! Selamat datang ${user.name}.');
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ChangeNotifierProvider<HomepageProvider>(
+              create: (_) => HomepageProvider(userId: user.id!),
+              child: HomePage(userId: user.id!),
+            ),
+          ),
+          (Route<dynamic> route) => false,
+        );
       } else {
-          if (provider.errorMessage != null) {
-              _showErrorSnackbar(provider.errorMessage!);
-          } else if (!(provider.formKey.currentState?.validate() ?? true)) {
-              // Tidak perlu tampilkan snackbar jika errornya dari validasi form
-              // Karena validator TextFormField sudah menampilkan pesan errornya
-          } else {
-              // Error umum jika bukan dari validasi atau pesan spesifik
-              _showErrorSnackbar('Login gagal. Periksa kembali data Anda.');
-          }
+        // Ini skenario yang aneh, user null setelah login sukses
+        _showErrorSnackbar('Terjadi kesalahan internal setelah login.');
       }
+    } else {
+      if (provider.errorMessage != null) {
+        _showErrorSnackbar(provider.errorMessage!);
+      } else if (!(provider.formKey.currentState?.validate() ?? true)) {
+        // Tidak perlu tampilkan snackbar jika errornya dari validasi form
+        // Karena validator TextFormField sudah menampilkan pesan errornya
+      } else {
+        // Error umum jika bukan dari validasi atau pesan spesifik
+        _showErrorSnackbar('Login gagal. Periksa kembali data Anda.');
+      }
+    }
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -154,7 +164,8 @@ class _LoginScreenContentState extends State<_LoginScreenContent> {
                                 color: Colors.black87)),
                         const SizedBox(height: 8),
                         TextFormField(
-                          controller: loginProvider.emailController, // Dari Provider
+                          controller:
+                              loginProvider.emailController, // Dari Provider
                           keyboardType: TextInputType.emailAddress,
                           autovalidateMode: AutovalidateMode.onUserInteraction,
                           validator: (value) {
@@ -163,17 +174,35 @@ class _LoginScreenContentState extends State<_LoginScreenContent> {
                             }
                             return null;
                           },
-                          decoration: InputDecoration( /* Style sama seperti sebelumnya */
+                          decoration: InputDecoration(
+                            /* Style sama seperti sebelumnya */
                             hintText: 'Masukkan email atau nomor telepon',
-                            hintStyle: GoogleFonts.poppins(color: Colors.grey[400]),
+                            hintStyle:
+                                GoogleFonts.poppins(color: Colors.grey[400]),
                             filled: true,
                             fillColor: Colors.white,
-                            contentPadding: const EdgeInsets.symmetric(vertical: 15.0, horizontal: 15.0),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10.0), borderSide: BorderSide(color: Colors.grey[300]!)),
-                            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10.0), borderSide: BorderSide(color: Colors.grey[350]!)),
-                            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10.0), borderSide: BorderSide(color: Colors.blue[600]!, width: 1.5)),
-                            errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10.0), borderSide: const BorderSide(color: Colors.red, width: 1.0)),
-                            focusedErrorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10.0), borderSide: const BorderSide(color: Colors.red, width: 1.5)),
+                            contentPadding: const EdgeInsets.symmetric(
+                                vertical: 15.0, horizontal: 15.0),
+                            border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10.0),
+                                borderSide:
+                                    BorderSide(color: Colors.grey[300]!)),
+                            enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10.0),
+                                borderSide:
+                                    BorderSide(color: Colors.grey[350]!)),
+                            focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10.0),
+                                borderSide: BorderSide(
+                                    color: Colors.blue[600]!, width: 1.5)),
+                            errorBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10.0),
+                                borderSide: const BorderSide(
+                                    color: Colors.red, width: 1.0)),
+                            focusedErrorBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10.0),
+                                borderSide: const BorderSide(
+                                    color: Colors.red, width: 1.5)),
                           ),
                           style: GoogleFonts.poppins(fontSize: 14),
                         ),
@@ -185,8 +214,10 @@ class _LoginScreenContentState extends State<_LoginScreenContent> {
                                 color: Colors.black87)),
                         const SizedBox(height: 8),
                         TextFormField(
-                          controller: loginProvider.passwordController, // Dari Provider
-                          obscureText: loginProvider.obscurePassword, // Dari Provider
+                          controller:
+                              loginProvider.passwordController, // Dari Provider
+                          obscureText:
+                              loginProvider.obscurePassword, // Dari Provider
                           autovalidateMode: AutovalidateMode.onUserInteraction,
                           validator: (value) {
                             if (value == null || value.isEmpty) {
@@ -194,17 +225,35 @@ class _LoginScreenContentState extends State<_LoginScreenContent> {
                             }
                             return null;
                           },
-                          decoration: InputDecoration( /* Style sama seperti sebelumnya */
+                          decoration: InputDecoration(
+                            /* Style sama seperti sebelumnya */
                             hintText: 'Masukkan Kata sandi',
-                            hintStyle: GoogleFonts.poppins(color: Colors.grey[400]),
+                            hintStyle:
+                                GoogleFonts.poppins(color: Colors.grey[400]),
                             filled: true,
                             fillColor: Colors.white,
-                            contentPadding: const EdgeInsets.symmetric(vertical: 15.0, horizontal: 15.0),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10.0), borderSide: BorderSide(color: Colors.grey[300]!)),
-                            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10.0), borderSide: BorderSide(color: Colors.grey[350]!)),
-                            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10.0), borderSide: BorderSide(color: Colors.blue[600]!, width: 1.5)),
-                            errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10.0), borderSide: const BorderSide(color: Colors.red, width: 1.0)),
-                            focusedErrorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10.0), borderSide: const BorderSide(color: Colors.red, width: 1.5)),
+                            contentPadding: const EdgeInsets.symmetric(
+                                vertical: 15.0, horizontal: 15.0),
+                            border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10.0),
+                                borderSide:
+                                    BorderSide(color: Colors.grey[300]!)),
+                            enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10.0),
+                                borderSide:
+                                    BorderSide(color: Colors.grey[350]!)),
+                            focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10.0),
+                                borderSide: BorderSide(
+                                    color: Colors.blue[600]!, width: 1.5)),
+                            errorBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10.0),
+                                borderSide: const BorderSide(
+                                    color: Colors.red, width: 1.0)),
+                            focusedErrorBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10.0),
+                                borderSide: const BorderSide(
+                                    color: Colors.red, width: 1.5)),
                             suffixIcon: IconButton(
                               icon: Icon(
                                   loginProvider.obscurePassword
@@ -212,7 +261,8 @@ class _LoginScreenContentState extends State<_LoginScreenContent> {
                                       : Icons.visibility_outlined,
                                   color: Colors.grey[500],
                                   size: 20),
-                              onPressed: () => loginProvider.togglePasswordVisibility(),
+                              onPressed: () =>
+                                  loginProvider.togglePasswordVisibility(),
                             ),
                           ),
                           style: GoogleFonts.poppins(fontSize: 14),
@@ -224,9 +274,14 @@ class _LoginScreenContentState extends State<_LoginScreenContent> {
                             onPressed: () {
                               ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
-                                      content: Text('Fitur Lupa Kata Sandi belum diimplementasikan.')));
+                                      content: Text(
+                                          'Fitur Lupa Kata Sandi belum diimplementasikan.')));
                             },
-                            style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: Size.zero, tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                            style: TextButton.styleFrom(
+                                padding: EdgeInsets.zero,
+                                minimumSize: Size.zero,
+                                tapTargetSize:
+                                    MaterialTapTargetSize.shrinkWrap),
                             child: Text('Lupa kata sandi',
                                 style: GoogleFonts.poppins(
                                     fontSize: 13,
@@ -236,12 +291,15 @@ class _LoginScreenContentState extends State<_LoginScreenContent> {
                         ),
                         const SizedBox(height: 25),
                         ElevatedButton(
-                          onPressed: loginProvider.isLoading ? null : () => _attemptLogin(loginProvider),
+                          onPressed: loginProvider.isLoading
+                              ? null
+                              : () => _attemptLogin(loginProvider),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.blue[700],
                             disabledBackgroundColor: Colors.blue[300],
                             minimumSize: const Size(double.infinity, 50),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10.0)),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10.0)),
                             elevation: 3,
                           ),
                           child: loginProvider.isLoading
@@ -250,7 +308,8 @@ class _LoginScreenContentState extends State<_LoginScreenContent> {
                                   width: 24,
                                   child: CircularProgressIndicator(
                                     strokeWidth: 3,
-                                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                        Colors.white),
                                   ),
                                 )
                               : Text(
@@ -267,13 +326,17 @@ class _LoginScreenContentState extends State<_LoginScreenContent> {
                   const SizedBox(height: 30),
                   RichText(
                     text: TextSpan(
-                      style: GoogleFonts.poppins(fontSize: 14, color: Colors.grey[700]),
+                      style: GoogleFonts.poppins(
+                          fontSize: 14, color: Colors.grey[700]),
                       children: <TextSpan>[
                         const TextSpan(text: 'Belum memiliki akun? '),
                         TextSpan(
                           text: 'Daftar',
-                          style: GoogleFonts.poppins(color: Colors.blue[700], fontWeight: FontWeight.w600),
-                          recognizer: TapGestureRecognizer()..onTap = _navigateToRegister,
+                          style: GoogleFonts.poppins(
+                              color: Colors.blue[700],
+                              fontWeight: FontWeight.w600),
+                          recognizer: TapGestureRecognizer()
+                            ..onTap = _navigateToRegister,
                         ),
                       ],
                     ),

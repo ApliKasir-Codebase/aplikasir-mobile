@@ -25,7 +25,9 @@ class _HomeProductListScreenState extends State<HomeProductListScreen> {
     super.initState();
     // Listener untuk search controller akan memanggil provider
     _searchController.addListener(() {
-      context.read<HomepageProvider>().filterHomeProducts(_searchController.text);
+      context
+          .read<HomepageProvider>()
+          .filterHomeProducts(_searchController.text);
     });
   }
 
@@ -60,13 +62,23 @@ class _HomeProductListScreenState extends State<HomeProductListScreen> {
         child: OutlinedButton.icon(
           onPressed: maxStock <= 0
               ? null
-              : () => provider.updateCheckoutQuantity(productId, 1, showError: _showErrorSnackbarInView),
-          icon: Icon(Icons.add, size: 18, color: maxStock <= 0 ? Colors.grey : Colors.blue.shade700),
-          label: Text('Tambah', style: GoogleFonts.poppins(fontSize: 12, color: maxStock <= 0 ? Colors.grey : Colors.blue.shade700)),
+              : () => provider.updateCheckoutQuantity(productId, 1,
+                  showError: _showErrorSnackbarInView),
+          icon: Icon(Icons.add,
+              size: 18,
+              color: maxStock <= 0 ? Colors.grey : Colors.blue.shade700),
+          label: Text('Tambah',
+              style: GoogleFonts.poppins(
+                  fontSize: 12,
+                  color: maxStock <= 0 ? Colors.grey : Colors.blue.shade700)),
           style: OutlinedButton.styleFrom(
             foregroundColor: Colors.blue.shade700,
-            side: BorderSide(color: maxStock <= 0 ? Colors.grey.shade300 : Colors.blue.shade600),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            side: BorderSide(
+                color: maxStock <= 0
+                    ? Colors.grey.shade300
+                    : Colors.blue.shade600),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             padding: const EdgeInsets.symmetric(horizontal: 10),
             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
           ),
@@ -83,7 +95,9 @@ class _HomeProductListScreenState extends State<HomeProductListScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             InkWell(
-              onTap: () => provider.updateCheckoutQuantity(productId, currentQuantity - 1, showError: _showErrorSnackbarInView),
+              onTap: () => provider.updateCheckoutQuantity(
+                  productId, currentQuantity - 1,
+                  showError: _showErrorSnackbarInView),
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6),
                 alignment: Alignment.center,
@@ -96,20 +110,25 @@ class _HomeProductListScreenState extends State<HomeProductListScreen> {
               constraints: const BoxConstraints(minWidth: 24),
               child: Text(
                 currentQuantity.toString(),
-                style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 13),
+                style: GoogleFonts.poppins(
+                    fontWeight: FontWeight.w600, fontSize: 13),
               ),
             ),
             InkWell(
               onTap: currentQuantity >= maxStock
                   ? null
-                  : () => provider.updateCheckoutQuantity(productId, currentQuantity + 1, showError: _showErrorSnackbarInView),
+                  : () => provider.updateCheckoutQuantity(
+                      productId, currentQuantity + 1,
+                      showError: _showErrorSnackbarInView),
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6),
                 alignment: Alignment.center,
                 child: Icon(
                   Icons.add,
                   size: 18,
-                  color: currentQuantity >= maxStock ? Colors.grey : Colors.green.shade700,
+                  color: currentQuantity >= maxStock
+                      ? Colors.grey
+                      : Colors.green.shade700,
                 ),
               ),
             ),
@@ -120,7 +139,8 @@ class _HomeProductListScreenState extends State<HomeProductListScreen> {
   }
 
   Widget _buildHomeProductCard(Product product, HomepageProvider provider) {
-    final int currentQuantity = product.id != null ? (provider.checkoutCart[product.id!] ?? 0) : 0;
+    final int currentQuantity =
+        product.id != null ? (provider.checkoutCart[product.id!] ?? 0) : 0;
     final bool isSelected = currentQuantity > 0;
 
     ImageProvider? productImage;
@@ -135,17 +155,23 @@ class _HomeProductListScreenState extends State<HomeProductListScreen> {
       }
     }
 
-    return Card(
+    return Container(
       margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-      elevation: isSelected ? 3.0 : 1.5,
-      shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12.0),
-          side: BorderSide(
-            color: isSelected ? Colors.blue.shade300 : Colors.grey.shade200,
-            width: isSelected ? 1.5 : 1.0,
-          )),
-      color: Colors.white,
-      surfaceTintColor: Colors.white,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12.0),
+        border: Border.all(
+          color: isSelected ? Colors.blue.shade300 : Colors.grey.shade200,
+          width: isSelected ? 1.5 : 1.0,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
       child: Padding(
         padding: const EdgeInsets.all(12.0),
         child: Row(
@@ -159,13 +185,16 @@ class _HomeProductListScreenState extends State<HomeProductListScreen> {
                 color: Colors.grey.shade200,
                 child: productImage != null
                     ? Image(
-                        key: ValueKey(product.id.toString() + (product.gambarProduk ?? '')), // Correct key usage
+                        key: ValueKey(product.id.toString() +
+                            (product.gambarProduk ?? '')), // Correct key usage
                         image: productImage,
                         width: 65,
                         height: 65,
                         fit: BoxFit.cover,
-                        errorBuilder: (c, e, s) => Icon(Icons.broken_image, color: Colors.grey[400], size: 30))
-                    : Icon(Icons.inventory_2_outlined, color: Colors.grey[400], size: 35),
+                        errorBuilder: (c, e, s) => Icon(Icons.broken_image,
+                            color: Colors.grey[400], size: 30))
+                    : Icon(Icons.inventory_2_outlined,
+                        color: Colors.grey[400], size: 35),
               ),
             ),
             const SizedBox(width: 12),
@@ -176,14 +205,21 @@ class _HomeProductListScreenState extends State<HomeProductListScreen> {
               children: [
                 Text(
                   product.namaProduk,
-                  style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 15.0),
+                  style: GoogleFonts.poppins(
+                      fontWeight: FontWeight.w600, fontSize: 15.0),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 2),
-                Text('Kode: ${product.kodeProduk}', style: GoogleFonts.poppins(fontSize: 11.0, color: Colors.grey.shade600)),
+                Text('Kode: ${product.kodeProduk}',
+                    style: GoogleFonts.poppins(
+                        fontSize: 11.0, color: Colors.grey.shade600)),
                 const SizedBox(height: 4),
-                Text(currencyFormatter.format(product.hargaJual), style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 14.0, color: Colors.green.shade700)),
+                Text(currencyFormatter.format(product.hargaJual),
+                    style: GoogleFonts.poppins(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14.0,
+                        color: Colors.green.shade700)),
               ],
             )),
             Column(
@@ -195,8 +231,12 @@ class _HomeProductListScreenState extends State<HomeProductListScreen> {
                           fontSize: 11.0,
                           color: product.jumlahProduk <= 0
                               ? Colors.red.shade700
-                              : (product.jumlahProduk <= 5 ? Colors.orange.shade800 : Colors.black54),
-                          fontWeight: product.jumlahProduk <= 5 ? FontWeight.w600 : FontWeight.normal)),
+                              : (product.jumlahProduk <= 5
+                                  ? Colors.orange.shade800
+                                  : Colors.black54),
+                          fontWeight: product.jumlahProduk <= 5
+                              ? FontWeight.w600
+                              : FontWeight.normal)),
                   const SizedBox(height: 8),
                   _buildQuantityControl(
                     productId: product.id,
@@ -210,7 +250,6 @@ class _HomeProductListScreenState extends State<HomeProductListScreen> {
       ),
     );
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -231,31 +270,43 @@ class _HomeProductListScreenState extends State<HomeProductListScreen> {
                     borderRadius: BorderRadius.circular(10.0),
                     boxShadow: [
                       BoxShadow(
-                          color: Colors.grey.withOpacity(0.1),
-                          blurRadius: 4,
-                          offset: const Offset(0, 1))
+                        color: Colors.black.withOpacity(0.06),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
                     ]),
                 child: TextField(
-                  controller: _searchController, // Digunakan untuk trigger filter di provider
+                  controller:
+                      _searchController, // Digunakan untuk trigger filter di provider
                   decoration: InputDecoration(
                     hintText: 'Cari produk (nama/kode)',
-                    hintStyle: GoogleFonts.poppins(color: Colors.grey.shade500, fontSize: MediaQuery.of(context).size.width * 0.035),
-                    prefixIcon: Icon(Icons.search, color: Colors.grey.shade600, size: MediaQuery.of(context).size.width * 0.06),
+                    hintStyle: GoogleFonts.poppins(
+                        color: Colors.grey.shade500,
+                        fontSize: MediaQuery.of(context).size.width * 0.035),
+                    prefixIcon: Icon(Icons.search,
+                        color: Colors.grey.shade600,
+                        size: MediaQuery.of(context).size.width * 0.06),
                     suffixIcon: _searchController.text.isNotEmpty
                         ? IconButton(
-                            icon: Icon(Icons.clear, color: Colors.grey.shade500, size: MediaQuery.of(context).size.width * 0.06),
+                            icon: Icon(Icons.clear,
+                                color: Colors.grey.shade500,
+                                size: MediaQuery.of(context).size.width * 0.06),
                             onPressed: () {
-                              _searchController.clear(); // Listener akan terpicu
+                              _searchController
+                                  .clear(); // Listener akan terpicu
                             },
                             padding: EdgeInsets.zero,
                             constraints: const BoxConstraints(),
                           )
                         : null,
                     border: InputBorder.none,
-                    contentPadding: const EdgeInsets.symmetric(vertical: 14.0, horizontal: 5),
+                    contentPadding: const EdgeInsets.symmetric(
+                        vertical: 14.0, horizontal: 5),
                     isDense: true,
                   ),
-                  style: GoogleFonts.poppins(fontSize: MediaQuery.of(context).size.width * 0.015 + 8, color: Colors.black87), //Adjusted
+                  style: GoogleFonts.poppins(
+                      fontSize: MediaQuery.of(context).size.width * 0.015 + 8,
+                      color: Colors.black87), //Adjusted
                 ),
               ),
             ),
@@ -271,14 +322,18 @@ class _HomeProductListScreenState extends State<HomeProductListScreen> {
                     borderRadius: BorderRadius.circular(10.0),
                     boxShadow: [
                       BoxShadow(
-                          color: Colors.grey.withOpacity(0.1),
-                          blurRadius: 4,
-                          offset: const Offset(0, 1))
+                        color: Colors.black.withOpacity(0.06),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
                     ]),
                 child: Tooltip(
-                  message: homepageProvider.sortAscending ? 'Urutkan Z-A' : 'Urutkan A-Z',
+                  message: homepageProvider.sortAscending
+                      ? 'Urutkan Z-A'
+                      : 'Urutkan A-Z',
                   child: Icon(
-                    Icons.sort_by_alpha, // Icon tetap, bisa ditambah visual sort direction jika mau
+                    Icons
+                        .sort_by_alpha, // Icon tetap, bisa ditambah visual sort direction jika mau
                     color: Colors.blue.shade700,
                     size: 24,
                   ),
@@ -297,34 +352,48 @@ class _HomeProductListScreenState extends State<HomeProductListScreen> {
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              const Icon(Icons.error_outline, color: Colors.red, size: 40),
+                              const Icon(Icons.error_outline,
+                                  color: Colors.red, size: 40),
                               const SizedBox(height: 10),
                               Text(homepageProvider.homeErrorMessage,
-                                  style: GoogleFonts.poppins(color: Colors.red.shade700, fontSize: 15),
+                                  style: GoogleFonts.poppins(
+                                      color: Colors.red.shade700, fontSize: 15),
                                   textAlign: TextAlign.center),
                               const SizedBox(height: 15),
                               ElevatedButton.icon(
-                                  onPressed: () => homepageProvider.loadHomeProducts(),
+                                  onPressed: () =>
+                                      homepageProvider.loadHomeProducts(),
                                   icon: const Icon(Icons.refresh),
                                   label: const Text("Coba Lagi")),
                             ],
                           )))
-                  : homepageProvider.homeAllProducts.isEmpty // Cek _allProducts dari provider
+                  : homepageProvider.homeAllProducts
+                          .isEmpty // Cek _allProducts dari provider
                       ? Center(
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              const Icon(Icons.storefront_outlined, color: Colors.grey, size: 50),
+                              const Icon(Icons.storefront_outlined,
+                                  color: Colors.grey, size: 50),
                               const SizedBox(height: 10),
                               Text('Belum ada produk ditambahkan.',
                                   textAlign: TextAlign.center,
-                                  style: GoogleFonts.poppins(color: Colors.grey.shade500, fontSize: MediaQuery.of(context).size.width * 0.045)),
+                                  style: GoogleFonts.poppins(
+                                      color: Colors.grey.shade500,
+                                      fontSize:
+                                          MediaQuery.of(context).size.width *
+                                              0.045)),
                               Text('Tambahkan melalui menu Kelola.',
                                   textAlign: TextAlign.center,
-                                  style: GoogleFonts.poppins(color: Colors.grey.shade500, fontSize: MediaQuery.of(context).size.width * 0.035)),
+                                  style: GoogleFonts.poppins(
+                                      color: Colors.grey.shade500,
+                                      fontSize:
+                                          MediaQuery.of(context).size.width *
+                                              0.035)),
                               const SizedBox(height: 15),
                               ElevatedButton.icon(
-                                  onPressed: () => homepageProvider.loadHomeProducts(),
+                                  onPressed: () =>
+                                      homepageProvider.loadHomeProducts(),
                                   icon: const Icon(Icons.refresh),
                                   label: const Text("Muat Ulang"))
                             ],
@@ -334,17 +403,24 @@ class _HomeProductListScreenState extends State<HomeProductListScreen> {
                           ? Center(
                               child: Text(
                               'Produk "${_searchController.text}" tidak ditemukan.',
-                              style: GoogleFonts.poppins(color: Colors.grey.shade500, fontSize: 15),
+                              style: GoogleFonts.poppins(
+                                  color: Colors.grey.shade500, fontSize: 15),
                               textAlign: TextAlign.center,
                             ))
                           : RefreshIndicator(
-                              onRefresh: () => homepageProvider.loadHomeProducts(),
+                              onRefresh: () =>
+                                  homepageProvider.loadHomeProducts(),
                               child: ListView.builder(
                                 physics: const AlwaysScrollableScrollPhysics(),
-                                padding: const EdgeInsets.only(bottom: 90, top: 5), // bottom: FAB space
-                                itemCount: homepageProvider.homeFilteredProducts.length,
+                                padding: const EdgeInsets.only(
+                                    bottom: 90, top: 5), // bottom: FAB space
+                                itemCount: homepageProvider
+                                    .homeFilteredProducts.length,
                                 itemBuilder: (context, index) {
-                                  return _buildHomeProductCard(homepageProvider.homeFilteredProducts[index], homepageProvider);
+                                  return _buildHomeProductCard(
+                                      homepageProvider
+                                          .homeFilteredProducts[index],
+                                      homepageProvider);
                                 },
                               ),
                             ),
@@ -353,5 +429,3 @@ class _HomeProductListScreenState extends State<HomeProductListScreen> {
     );
   }
 }
-
-

@@ -15,7 +15,7 @@ class DatabaseHelper {
   static Database? _database;
   // Beri nama unik jika ingin reset total saat upgrade besar
   static const String dbName = 'aplikasir_mobile_v6_sync.db';
-  static const int dbVersion = 6; // Versi dengan sync_status & soft delete
+  static const int dbVersion = 7; // Updated: passwordHash is now nullable
 
   DatabaseHelper._privateConstructor();
 
@@ -143,6 +143,28 @@ class DatabaseHelper {
       } // Pastikan ada updated_at
     }
 
+    // Upgrade from v6 to v7: Make passwordHash nullable
+    if (oldVersion < 7) {
+      print("Applying upgrades for v6 to v7 (Making passwordHash nullable)...");
+      try {
+        // SQLite doesn't support ALTER COLUMN, so we need to recreate the table
+        await db.execute('ALTER TABLE users RENAME TO users_temp');
+        await _createUsersTable(db);
+        // Copy data from temp table
+        await db.execute('''
+          INSERT INTO users (id, name, email, phoneNumber, storeName, storeAddress, 
+                            profileImagePath, created_at, updated_at, last_sync_time)
+          SELECT id, name, email, phoneNumber, storeName, storeAddress, 
+                 profileImagePath, created_at, updated_at, last_sync_time
+          FROM users_temp
+        ''');
+        await db.execute('DROP TABLE users_temp');
+        print("  Successfully made passwordHash nullable in users table.");
+      } catch (e) {
+        print("  Error updating users table for v7: $e");
+      }
+    }
+
     try {
       await batch.commit(noResult: true);
       print("Batch upgrade commit successful.");
@@ -185,7 +207,7 @@ class DatabaseHelper {
         phoneNumber TEXT UNIQUE NOT NULL,
         storeName TEXT NOT NULL,
         storeAddress TEXT NOT NULL,
-        passwordHash TEXT NOT NULL,
+        passwordHash TEXT NULL,
         profileImagePath TEXT NULL,
         created_at TEXT,
         updated_at TEXT,
@@ -280,8 +302,8 @@ class DatabaseHelper {
 
     // Pastikan ID ada di map untuk replace
     userMap['id'] = user.id;
-    // Password hash tidak disimpan/diupdate dari sini
-    userMap.remove('passwordHash');
+    // Set passwordHash to null since we don't store passwords locally for security
+    userMap['passwordHash'] = null;
 
     print("Inserting/Replacing local user data for ID: ${user.id}");
     try {
@@ -301,6 +323,8 @@ class DatabaseHelper {
 
   Future<User?> getUserById(int id) async {
     final db = await database;
+    print('DEBUG getUserById: Querying user with ID: $id');
+
     final List<Map<String, dynamic>> maps = await db.query('users',
         columns: [
           'id',
@@ -317,14 +341,68 @@ class DatabaseHelper {
         where: 'id = ?',
         whereArgs: [id],
         limit: 1);
+
+    print('DEBUG getUserById: Query result count: ${maps.length}');
+
     if (maps.isNotEmpty) {
+      final userMap = Map<String, dynamic>.from(maps.first);
+      print('DEBUG getUserById: Raw user data: $userMap');
+
+      // Check for null/empty store data
+      final storeName = userMap['storeName'];
+      final storeAddress = userMap['storeAddress'];
+      final phoneNumber = userMap['phoneNumber'];
+
+      print(
+          'DEBUG getUserById: Store Name: "$storeName" (${storeName?.runtimeType})');
+      print(
+          'DEBUG getUserById: Store Address: "$storeAddress" (${storeAddress?.runtimeType})');
+      print(
+          'DEBUG getUserById: Phone Number: "$phoneNumber" (${phoneNumber?.runtimeType})');
+
       // Tambahkan passwordHash dummy jika model memerlukannya
-      var userMap = Map<String, dynamic>.from(maps.first);
       userMap['passwordHash'] =
           ''; // Atau ambil dari secure storage jika ada offline auth
-      return User.fromMap(userMap);
+
+      final user = User.fromMap(userMap);
+      print('DEBUG getUserById: Created User object: ${user.toString()}');
+      return user;
     }
+
+    print('DEBUG getUserById: No user found with ID: $id');
     return null;
+  }
+
+  // Public methods for providers and screens
+  Future<int> insertCustomer(Customer customer) async {
+    return insertCustomerLocal(customer);
+  }
+
+  Future<int> insertTransaction(TransactionModel transaction) async {
+    return insertTransactionLocal(transaction);
+  }
+
+  Future<int> updateProductStock(int productId, int quantity) async {
+    final db = await database;
+    final now = DateTime.now().toIso8601String();
+    return await db.rawUpdate(
+      'UPDATE products SET jumlah_produk = jumlah_produk - ?, updated_at = ?, sync_status = ? WHERE id = ? AND jumlah_produk >= ?',
+      [quantity, now, 'updated', productId, quantity],
+    );
+  }
+
+  Future<Customer?> getCustomerById(int id) async {
+    final db = await database;
+    final maps =
+        await db.query('customers', where: 'id = ?', whereArgs: [id], limit: 1);
+    if (maps.isNotEmpty) return Customer.fromMap(maps.first);
+    return null;
+  }
+
+  Future<int> updateUser(User user) async {
+    final db = await database;
+    return await db.update('users', user.toMapWithoutId(),
+        where: 'id = ?', whereArgs: [user.id]);
   }
 
   // --- Product CRUD Lokal (Sync-Aware) ---
@@ -696,10 +774,8 @@ class DatabaseHelper {
         whereArgs: whereArgs,
         orderBy: 'tanggal_transaksi DESC');
 
-    // Parsing JSON
-    List<TransactionModel> transactions = [];
-    for (var map in maps) {/* ... parsing sama ... */}
-    return transactions;
+    // Parse transactions using fromMap
+    return maps.map((map) => TransactionModel.fromMap(map)).toList();
   }
 
   Future<TransactionModel?> getTransactionById(int transactionId) async {
@@ -708,7 +784,7 @@ class DatabaseHelper {
         where: 'id = ? AND is_deleted = 0',
         whereArgs: [transactionId],
         limit: 1); // <-- Filter
-    if (maps.isNotEmpty) {/* ... parsing sama ... */}
+    if (maps.isNotEmpty) return TransactionModel.fromMap(maps.first);
     return null;
   }
 
@@ -723,9 +799,8 @@ class DatabaseHelper {
       whereArgs: [userId, 'Kredit', 'Belum Lunas'],
       orderBy: 'tanggal_transaksi DESC',
     );
-    // ... (Parsing sama) ...
-    List<TransactionModel> transactions = [];
-    /* ... */ return transactions;
+    // Map result to TransactionModel
+    return maps.map((map) => TransactionModel.fromMap(map)).toList();
   }
 
   // Get Transactions by Customer ID (Filter is_deleted)
@@ -739,9 +814,8 @@ class DatabaseHelper {
       whereArgs: [userId, customerId],
       orderBy: 'tanggal_transaksi DESC',
     );
-    // ... (Parsing sama) ...
-    List<TransactionModel> transactions = [];
-    /* ... */ return transactions;
+    // Map result to TransactionModel
+    return maps.map((map) => TransactionModel.fromMap(map)).toList();
   }
 
   // --- Fungsi untuk Sinkronisasi ---
@@ -780,19 +854,13 @@ class DatabaseHelper {
       whereArgs: ['synced'],
     );
     print("Found ${maps.length} transactions to sync.");
-    List<TransactionModel> transactions = [];
-    for (var map in maps) {
+    // Parse and return transactions for sync
+    return maps.map((map) {
       Map<String, dynamic> mutableMap = Map<String, dynamic>.from(map);
       mutableMap['detail_items'] =
           _parseDetailItems(mutableMap['detail_items'], mutableMap['id']);
-      try {
-        transactions.add(TransactionModel.fromMap(mutableMap));
-      } catch (e) {
-        print(
-            "Error creating TransactionModel for sync from map: $map - Error: $e");
-      }
-    }
-    return transactions;
+      return TransactionModel.fromMap(mutableMap);
+    }).toList();
   }
 
   // Fungsi Insert/Replace dari API (Jalankan dalam Transaction!)
@@ -1115,5 +1183,4 @@ class DatabaseHelper {
       print("Database closed.");
     }
   }
-
 } // --- Akhir DatabaseHelper ---
