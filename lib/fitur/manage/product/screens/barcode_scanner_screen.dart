@@ -320,21 +320,38 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen>
     if (widget.returnOnScan) {
       Navigator.of(context).pop(barcode);
       return;
-    }
-    // In checkoutFlow mode, accumulate scanned items and remain on this screen
+    } // In checkoutFlow mode, accumulate scanned items and remain on this screen
     if (widget.checkoutFlow) {
       await _cameraController?.stopImageStream();
       try {
         final hp = Provider.of<HomepageProvider>(context, listen: false);
-        final prod =
-            hp.homeAllProducts.firstWhere((p) => p.kodeProduk == barcode);
-        setState(() {
-          _checkoutScanned.add(prod);
-          _scannedBarcode = null;
-        });
-        if (await Vibration.hasVibrator() == true)
-          Vibration.vibrate(duration: 100);
-      } catch (_) {
+
+        // More flexible product search
+        Product? foundProduct;
+        // Try to find product with flexible matching
+        for (var product in hp.homeAllProducts) {
+          if (_isProductCodeMatch(product.kodeProduk, barcode)) {
+            foundProduct = product;
+            break;
+          }
+        }
+
+        if (foundProduct != null) {
+          setState(() {
+            _checkoutScanned.add(foundProduct!);
+            _scannedBarcode = null;
+          });
+          if (await Vibration.hasVibrator() == true)
+            Vibration.vibrate(duration: 100);
+
+          _showCustomSnackBar('Produk ditambahkan: ${foundProduct.namaProduk}',
+              isError: false);
+        } else {
+          _showCustomSnackBar('Produk tidak ditemukan dengan barcode: $barcode',
+              isError: true);
+        }
+      } catch (e) {
+        print('Error finding product: $e');
         _showCustomSnackBar('Produk tidak terdaftar', isError: true);
         setState(() {
           _scannedBarcode = null;
@@ -359,11 +376,27 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen>
     // If still within blocked period from previous duplicate, ignore
     if (_blockedUntil != null && now.isBefore(_blockedUntil!)) {
       return;
+    } // Prevent duplicate scans with flexible matching
+    bool isDuplicate = false;
+    // Check pending products
+    for (var pendingProduct in _pendingProducts) {
+      if (_isProductCodeMatch(pendingProduct.code, barcode)) {
+        isDuplicate = true;
+        break;
+      }
     }
 
-    // Prevent duplicate scans
-    if (_pendingProducts.any((p) => p.code == barcode) ||
-        provider.allProducts.any((p) => p.kodeProduk == barcode)) {
+    // Check existing products
+    if (!isDuplicate) {
+      for (var product in provider.allProducts) {
+        if (_isProductCodeMatch(product.kodeProduk, barcode)) {
+          isDuplicate = true;
+          break;
+        }
+      }
+    }
+
+    if (isDuplicate) {
       // Show snack once and start block timer
       _showCustomSnackBar('Produk sudah terdaftar', isError: true);
       // Block new scans for 5 seconds
@@ -419,13 +452,32 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen>
 
   void _showError(String message) {
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(message),
-          backgroundColor: Colors.red,
-        ),
-      );
+      setState(() {
+        // Show error message in UI
+      });
+      _showCustomSnackBar(message, isError: true);
     }
+  }
+
+  // Helper function for flexible product code matching
+  bool _isProductCodeMatch(String productCode, String barcode) {
+    final cleanProductCode = productCode.trim().toUpperCase();
+    final cleanBarcode = barcode.trim().toUpperCase();
+
+    // 1. Exact match
+    if (cleanProductCode == cleanBarcode) return true;
+
+    // 2. Contains match (for codes with prefixes/suffixes)
+    if (cleanProductCode.contains(cleanBarcode) ||
+        cleanBarcode.contains(cleanProductCode)) return true;
+
+    // 3. Remove common separators and try again
+    final normalizedProductCode =
+        cleanProductCode.replaceAll(RegExp(r'[-_\s]'), '');
+    final normalizedBarcode = cleanBarcode.replaceAll(RegExp(r'[-_\s]'), '');
+    if (normalizedProductCode == normalizedBarcode) return true;
+
+    return false;
   }
 
   @override

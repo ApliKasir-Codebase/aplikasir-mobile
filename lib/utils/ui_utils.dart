@@ -462,6 +462,50 @@ class UIUtils {
       ),
     );
   }
+
+  // Show loading dialog
+  static void showLoadingDialog(
+    BuildContext context, {
+    String? message,
+  }) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          child: Container(
+            padding: const EdgeInsets.all(AppTheme.spacingLG),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+              boxShadow: AppTheme.shadowMD,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const CircularProgressIndicator(
+                  valueColor:
+                      AlwaysStoppedAnimation<Color>(AppTheme.primaryColor),
+                ),
+                if (message != null) ...[
+                  const SizedBox(height: AppTheme.spacingMD),
+                  Text(
+                    message,
+                    style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      color: AppTheme.grey700,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
 }
 
 // Enum for snackbar types

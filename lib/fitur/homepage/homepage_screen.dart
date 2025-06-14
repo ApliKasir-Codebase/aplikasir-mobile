@@ -16,6 +16,7 @@ import 'providers/homepage_provider.dart'; // Provider baru
 import 'screens/home_product_list_screen.dart'; // Screen baru untuk list produk
 import 'package:aplikasir_mobile/fitur/checkout/providers/checkout_providers.dart';
 import 'package:aplikasir_mobile/fitur/checkout/screens/checkout_screen.dart';
+import '../../widgets/sync_status_widget.dart';
 
 // Hapus import model/db_helper dari sini jika tidak digunakan langsung
 // import '../../../model/product_model.dart';
@@ -285,23 +286,27 @@ class _HomePageState extends State<HomePage> {
     final double bottomAppBarHeight = MediaQuery.of(context).size.height * 0.1;
     return Scaffold(
       appBar: AppBar(
-          title: _selectedIndex == 0
-              ? Image.asset('assets/images/logo_utama.png',
-                  height: MediaQuery.of(context).size.width * 0.085,
-                  fit: BoxFit.contain)
-              : Text(_appBarTitles[_selectedIndex],
-                  style: GoogleFonts.poppins(
-                      color: Colors.blue.shade800,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 24)),
-          backgroundColor: Colors.white,
-          foregroundColor: Colors.blue.shade800,
-          elevation: 2.5,
-          shadowColor: Colors.black26,
-          surfaceTintColor: Colors.white,
-          automaticallyImplyLeading: false,
-          centerTitle: false,
-          titleSpacing: 20.0),
+        title: _selectedIndex == 0
+            ? Image.asset('assets/images/logo_utama.png',
+                height: MediaQuery.of(context).size.width * 0.085,
+                fit: BoxFit.contain)
+            : Text(_appBarTitles[_selectedIndex],
+                style: GoogleFonts.poppins(
+                    color: Colors.blue.shade800,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 24)),
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.blue.shade800,
+        elevation: 2.5,
+        shadowColor: Colors.black26,
+        surfaceTintColor: Colors.white,
+        automaticallyImplyLeading: false,
+        centerTitle: false,
+        titleSpacing: 20.0,
+        actions: [
+          SyncStatusIndicator(showInAppBar: true),
+        ],
+      ),
       backgroundColor: const Color(0xFFF7F8FC),
       body: Stack(
         children: [

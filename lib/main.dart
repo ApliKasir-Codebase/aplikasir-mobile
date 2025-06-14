@@ -1,5 +1,6 @@
 // main.dart
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:google_fonts/google_fonts.dart'; // Impor GoogleFonts
@@ -9,6 +10,7 @@ import 'fitur/onboarding/onboarding_screen.dart';
 import 'package:aplikasir_mobile/fitur/homepage/homepage_screen.dart';
 import 'package:aplikasir_mobile/fitur/login/screens/login_screen.dart';
 import 'fitur/homepage/providers/homepage_provider.dart';
+import 'services/auto_sync_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -18,6 +20,15 @@ Future<void> main() async {
   final int loggedInUserId = prefs.getInt('loggedInUserId') ?? -1;
   final bool onboardingCompleted =
       prefs.getBool('onboardingCompleted') ?? false;
+
+  // Initialize auto sync service if user is logged in
+  if (isLoggedIn && loggedInUserId != -1) {
+    try {
+      await AutoSyncService().initialize();
+    } catch (e) {
+      print("Failed to initialize AutoSyncService: $e");
+    }
+  }
 
   Widget initialScreen;
   if (!onboardingCompleted) {
@@ -29,15 +40,16 @@ Future<void> main() async {
   }
 
   runApp(
-    MultiProvider(
-      providers: [
-        if (isLoggedIn && loggedInUserId != -1)
-          ChangeNotifierProvider<HomepageProvider>(
-            create: (_) => HomepageProvider(userId: loggedInUserId),
-          ),
-      ],
-      child: MyApp(initialScreen: initialScreen),
-    ),
+    isLoggedIn && loggedInUserId != -1
+        ? MultiProvider(
+            providers: [
+              ChangeNotifierProvider<HomepageProvider>(
+                create: (_) => HomepageProvider(userId: loggedInUserId),
+              ),
+            ],
+            child: MyApp(initialScreen: initialScreen),
+          )
+        : MyApp(initialScreen: initialScreen),
   );
 }
 
@@ -173,6 +185,16 @@ class _MyAppState extends State<MyApp> {
     // Aplikasi Utama
     return MaterialApp(
       title: 'ApliKasir', // Sesuaikan dengan nama aplikasi Anda
+      localizationsDelegates: [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: const [
+        Locale('id', 'ID'), // Indonesian
+        Locale('en', 'US'), // English (fallback)
+      ],
+      locale: const Locale('id', 'ID'),
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
           seedColor: Colors.blue.shade700, // Warna utama aplikasi Anda

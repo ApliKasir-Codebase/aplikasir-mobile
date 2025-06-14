@@ -259,7 +259,10 @@ class _ProductScreenContentState extends State<_ProductScreenContent> {
     final result = await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => EditProductScreen(initialProduct: product),
+        builder: (_) => ChangeNotifierProvider.value(
+          value: provider, // Pass the existing ProductProvider instance
+          child: EditProductScreen(initialProduct: product),
+        ),
       ),
     );
     if (result == true && mounted) {

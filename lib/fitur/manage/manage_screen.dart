@@ -137,103 +137,113 @@ class ManageScreen extends StatelessWidget {
       //   elevation: 1.0,
       //   centerTitle: true,
       // ),
-      body: Padding(
-        // Beri padding keseluruhan untuk konten
-        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 20.0),
-        child: GridView.count(
-          crossAxisCount: 2, // 2 kartu per baris
-          crossAxisSpacing: 12.0, // Jarak horizontal antar kartu
-          mainAxisSpacing: 12.0, // Jarak vertikal antar kartu
-          childAspectRatio: 1.1, // Sesuaikan rasio aspek kartu (width / height)
-          children: [
-            _buildManageCard(
-              context: context,
-              label: 'Produk',
-              iconPlaceholder: Icons.inventory_2_outlined,
-              iconColor: Colors.orange.shade700,
-              iconBackgroundColor: Colors.orange.shade50,
-              onTap: () {
-                Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (context) => ProductScreen(
-                            userId:
-                                userId))); // ProductScreen akan membuat ProductProvider
-              },
-            ),
-            _buildManageCard(
-              context: context,
-              label: 'QRIS',
-              iconPlaceholder: Icons.qr_code_scanner_outlined,
-              iconColor: Colors.purple.shade700,
-              iconBackgroundColor: Colors.purple.shade50,
-              onTap: () {
-                Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (context) => QrisSetupScreen(
-                            userId:
-                                userId))); // QrisSetupScreen akan membuat QrisProvider
-              },
-            ),
-            _buildManageCard(
-              context: context,
-              label: 'Kredit',
-              iconPlaceholder: Icons.receipt_long_outlined,
-              iconColor: Colors.teal.shade700,
-              iconBackgroundColor: Colors.teal.shade50,
-              onTap: () {
-                Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (context) => CreditListScreen(
-                            userId:
-                                userId))); // CreditListScreen akan membuat CreditListProvider
-              },
-            ),
-            _buildManageCard(
-              context: context,
-              label: 'Pelanggan',
-              iconPlaceholder: Icons.groups_outlined,
-              iconColor: Colors.indigo.shade700,
-              iconBackgroundColor: Colors.indigo.shade50,
-              onTap: () {
-                Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (context) => CustomerScreen(
-                            userId:
-                                userId))); // CustomerScreen akan membuat CustomerProvider
-              },
-            ),
-            _buildManageCard(
-              context: context,
-              label: 'Printer',
-              iconPlaceholder: Icons.print_outlined,
-              iconColor: Colors.blue.shade700,
-              iconBackgroundColor: Colors.blue.shade50,
-              onTap: () {
-                // TODO: Buat PrinterSettingsScreen dan Providernya jika perlu
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                    content: Text('Fitur Pengaturan Printer belum dibuat.')));
-              },
-            ),
-            _buildManageCard(
-              context: context,
-              label: 'Laporan',
-              iconPlaceholder: Icons.bar_chart_outlined,
-              iconColor: Colors.green.shade700,
-              iconBackgroundColor: Colors.green.shade50,
-              onTap: () {
-                Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (context) => ReportScreen(
-                            userId:
-                                userId))); // ReportScreen akan membuat ReportProvider
-              },
-            ),
-          ],
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 20.0),
+          child: Column(
+            children: [
+              GridView.count(
+                shrinkWrap: true, // Important: allows GridView to size itself
+                physics:
+                    const NeverScrollableScrollPhysics(), // Disable internal scrolling
+                crossAxisCount: 2, // 2 kartu per baris
+                crossAxisSpacing: 12.0, // Jarak horizontal antar kartu
+                mainAxisSpacing: 12.0, // Jarak vertikal antar kartu
+                childAspectRatio:
+                    1.1, // Sesuaikan rasio aspek kartu (width / height)
+                children: [
+                  _buildManageCard(
+                    context: context,
+                    label: 'Produk',
+                    iconPlaceholder: Icons.inventory_2_outlined,
+                    iconColor: Colors.orange.shade700,
+                    iconBackgroundColor: Colors.orange.shade50,
+                    onTap: () {
+                      Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (context) => ProductScreen(
+                                  userId:
+                                      userId))); // ProductScreen akan membuat ProductProvider
+                    },
+                  ),
+                  _buildManageCard(
+                    context: context,
+                    label: 'QRIS',
+                    iconPlaceholder: Icons.qr_code_scanner_outlined,
+                    iconColor: Colors.purple.shade700,
+                    iconBackgroundColor: Colors.purple.shade50,
+                    onTap: () {
+                      Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (context) => QrisSetupScreen(
+                                  userId:
+                                      userId))); // QrisSetupScreen akan membuat QrisProvider
+                    },
+                  ),
+                  _buildManageCard(
+                    context: context,
+                    label: 'Kredit',
+                    iconPlaceholder: Icons.receipt_long_outlined,
+                    iconColor: Colors.teal.shade700,
+                    iconBackgroundColor: Colors.teal.shade50,
+                    onTap: () {
+                      Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (context) => CreditListScreen(
+                                  userId:
+                                      userId))); // CreditListScreen akan membuat CreditListProvider
+                    },
+                  ),
+                  _buildManageCard(
+                    context: context,
+                    label: 'Pelanggan',
+                    iconPlaceholder: Icons.groups_outlined,
+                    iconColor: Colors.indigo.shade700,
+                    iconBackgroundColor: Colors.indigo.shade50,
+                    onTap: () {
+                      Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (context) => CustomerScreen(
+                                  userId:
+                                      userId))); // CustomerScreen akan membuat CustomerProvider
+                    },
+                  ),
+                  _buildManageCard(
+                    context: context,
+                    label: 'Printer',
+                    iconPlaceholder: Icons.print_outlined,
+                    iconColor: Colors.blue.shade700,
+                    iconBackgroundColor: Colors.blue.shade50,
+                    onTap: () {
+                      // TODO: Buat PrinterSettingsScreen dan Providernya jika perlu
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                          content:
+                              Text('Fitur Pengaturan Printer belum dibuat.')));
+                    },
+                  ),
+                  _buildManageCard(
+                    context: context,
+                    label: 'Laporan',
+                    iconPlaceholder: Icons.bar_chart_outlined,
+                    iconColor: Colors.green.shade700,
+                    iconBackgroundColor: Colors.green.shade50,
+                    onTap: () {
+                      Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (context) => ReportScreen(
+                                  userId:
+                                      userId))); // ReportScreen akan membuat ReportProvider
+                    },
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );

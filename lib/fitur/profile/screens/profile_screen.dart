@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import 'package:aplikasir_mobile/fitur/login/screens/login_screen.dart';
 import 'edit_profile_screen.dart';
 import '../providers/profile_provider.dart'; // Impor ProfileProvider
+import '../../settings/sync_settings_screen.dart'; // Impor SyncSettingsScreen
 // Hapus impor model User jika tidak digunakan langsung
 
 class ProfileScreen extends StatelessWidget {
@@ -134,6 +135,15 @@ class _ProfileScreenContent extends StatelessWidget {
         const SnackBar(content: Text('Data pengguna belum dimuat.')),
       );
     }
+  }
+
+  void _navigateToSyncSettings(BuildContext context) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const SyncSettingsScreen(),
+      ),
+    );
   }
 
   Widget _buildProfileCard(
@@ -348,12 +358,11 @@ class _ProfileScreenContent extends StatelessWidget {
                               _navigateToEditProfile(context, profileProvider)),
                       _buildSettingsItem(
                           context: context,
-                          icon: Icons.lock_outline_rounded,
-                          iconBgColor: Colors.orange.shade50,
-                          iconColor: Colors.orange.shade700,
-                          text: 'Ubah Kata Sandi',
-                          onTap: () => _navigateToEditProfile(context,
-                              profileProvider)), // Arahkan ke edit juga
+                          icon: Icons.sync_rounded,
+                          iconBgColor: Colors.cyan.shade50,
+                          iconColor: Colors.cyan.shade700,
+                          text: 'Pengaturan Sinkronisasi',
+                          onTap: () => _navigateToSyncSettings(context)),
                       _buildSettingsItem(
                           context: context,
                           icon: Icons.notifications_outlined,

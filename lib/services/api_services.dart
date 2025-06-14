@@ -207,6 +207,40 @@ class ApiService {
     }
   }
 
+  /// Resolve conflicts manually
+  Future<Map<String, dynamic>> synchronizeConflictResolution(
+      List<Map<String, dynamic>> conflicts) async {
+    final response = await http.post(
+      Uri.parse('${ApiConfig.baseUrl}/sync/resolve-conflicts'),
+      headers: await _getHeaders(),
+      body: jsonEncode({
+        'conflicts': conflicts,
+      }),
+    );
+    final responseBody = jsonDecode(response.body);
+    if (response.statusCode == 200) {
+      return responseBody;
+    } else {
+      print("Conflict resolution Error Response Body: ${response.body}");
+      throw Exception(responseBody['message'] ?? 'Conflict resolution failed');
+    }
+  }
+
+  /// Get sync performance metrics
+  Future<Map<String, dynamic>> getSyncMetrics(int days) async {
+    final response = await http.get(
+      Uri.parse('${ApiConfig.baseUrl}/sync/metrics?days=$days'),
+      headers: await _getHeaders(),
+    );
+    final responseBody = jsonDecode(response.body);
+    if (response.statusCode == 200) {
+      return responseBody;
+    } else {
+      print("Sync metrics Error Response Body: ${response.body}");
+      throw Exception(responseBody['message'] ?? 'Failed to get sync metrics');
+    }
+  }
+
   Future<User> getUserProfile() async {
     final response = await http.get(
       Uri.parse('${ApiConfig.baseUrl}/user/profile'),
@@ -271,6 +305,45 @@ class ApiService {
     }
   }
 
-  // ... (Implementasi endpoint lain: createCustomer, getCustomers, updateCustomer, deleteCustomer,
-  //      createTransaction, getTransactions, getTransactionById, updateTransactionStatus)
+  /// Upload-only synchronization (no download from server)
+  Future<Map<String, dynamic>> synchronizeUploadOnly(
+      String? lastSyncTimeIso, Map<String, dynamic> localChanges) async {
+    final response = await http.post(
+      Uri.parse('${ApiConfig.baseUrl}/sync/upload'),
+      headers: await _getHeaders(),
+      body: jsonEncode({
+        'clientLastSyncTime': lastSyncTimeIso,
+        'localChanges': localChanges,
+      }),
+    );
+    final responseBody = jsonDecode(response.body);
+    if (response.statusCode == 200) {
+      return responseBody;
+    } else {
+      print("Upload-only Sync Error Response Body: ${response.body}");
+      throw Exception(
+          responseBody['message'] ?? 'Upload-only synchronization failed');
+    }
+  }
+
+  /// Download-only synchronization (no upload to server)
+  Future<Map<String, dynamic>> synchronizeDownloadOnly(
+      String? lastSyncTimeIso, Map<String, dynamic> emptyChanges) async {
+    final response = await http.post(
+      Uri.parse('${ApiConfig.baseUrl}/sync/download'),
+      headers: await _getHeaders(),
+      body: jsonEncode({
+        'clientLastSyncTime': lastSyncTimeIso,
+        'localChanges': emptyChanges, // Empty changes for download-only
+      }),
+    );
+    final responseBody = jsonDecode(response.body);
+    if (response.statusCode == 200) {
+      return responseBody;
+    } else {
+      print("Download-only Sync Error Response Body: ${response.body}");
+      throw Exception(
+          responseBody['message'] ?? 'Download-only synchronization failed');
+    }
+  }
 }

@@ -9,6 +9,7 @@ import '../model/user_model.dart';
 import '../model/product_model.dart';
 import '../model/transaction_model.dart';
 import '../model/customer_model.dart';
+import '../services/auto_sync_service.dart';
 
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._privateConstructor();
@@ -405,6 +406,15 @@ class DatabaseHelper {
         where: 'id = ?', whereArgs: [user.id]);
   }
 
+  /// Trigger auto sync after data changes
+  void _triggerAutoSync() {
+    try {
+      AutoSyncService().triggerSyncOnDataChange();
+    } catch (e) {
+      print("DatabaseHelper: Error triggering auto sync: $e");
+    }
+  }
+
   // --- Product CRUD Lokal (Sync-Aware) ---
 
   Future<int> insertProductLocal(Product product) async {
@@ -426,6 +436,7 @@ class DatabaseHelper {
       int localId = await db.insert('products', productMap,
           conflictAlgorithm: ConflictAlgorithm.fail);
       print("Inserted local product (ID: $localId) with sync_status 'new'.");
+      _triggerAutoSync(); // Trigger auto sync after data change
       return localId;
     } catch (e) {
       print("Error inserting local product: $e");
@@ -471,6 +482,9 @@ class DatabaseHelper {
           conflictAlgorithm: ConflictAlgorithm.fail);
       print(
           "Updated local product (ID: ${product.id}), sync_status set to '${productMap['sync_status']}'. Rows affected: $rowsAffected");
+      if (rowsAffected > 0) {
+        _triggerAutoSync(); // Trigger auto sync after data change
+      }
       return rowsAffected;
     } catch (e) {
       print("Error updating local product: $e");
@@ -499,6 +513,9 @@ class DatabaseHelper {
       );
       print(
           "Soft deleted local product (ID: $id), sync_status set to 'deleted'. Rows affected: $rowsAffected");
+      if (rowsAffected > 0) {
+        _triggerAutoSync(); // Trigger auto sync after data change
+      }
       return rowsAffected;
     } catch (e) {
       print("Error soft deleting product: $e");
@@ -526,6 +543,7 @@ class DatabaseHelper {
       int localId = await db.insert('customers', customerMap,
           conflictAlgorithm: ConflictAlgorithm.fail);
       print("Inserted local customer (ID: $localId) with sync_status 'new'.");
+      _triggerAutoSync(); // Trigger auto sync after data change
       return localId;
     } catch (e) {
       print("Error inserting local customer: $e");
@@ -565,6 +583,9 @@ class DatabaseHelper {
           whereArgs: [customer.id, customer.idPengguna]);
       print(
           "Updated local customer (ID: ${customer.id}), sync_status set to '${customerMap['sync_status']}'. Rows affected: $rowsAffected");
+      if (rowsAffected > 0) {
+        _triggerAutoSync(); // Trigger auto sync after data change
+      }
       return rowsAffected;
     } catch (e) {
       print("Error updating local customer: $e");
@@ -588,6 +609,9 @@ class DatabaseHelper {
           whereArgs: [id, userId]);
       print(
           "Soft deleted local customer (ID: $id), sync_status set to 'deleted'. Rows affected: $rowsAffected");
+      if (rowsAffected > 0) {
+        _triggerAutoSync(); // Trigger auto sync after data change
+      }
       return rowsAffected;
     } catch (e) {
       print("Error soft deleting customer: $e");
@@ -671,6 +695,7 @@ class DatabaseHelper {
       if (newTxId != null) {
         print(
             "Inserted local transaction (ID: $newTxId) with sync_status 'new'.");
+        _triggerAutoSync(); // Trigger auto sync after data change
         return newTxId!;
       } else {
         throw Exception("Transaction insert failed within DB transaction.");
@@ -698,7 +723,7 @@ class DatabaseHelper {
     print(
         "Updating local transaction $transactionId status to '$newStatus', sync_status to '$newSyncStatus'");
     try {
-      return await db.update(
+      int rowsAffected = await db.update(
         'transactions',
         {
           'status_pembayaran': newStatus,
@@ -708,6 +733,10 @@ class DatabaseHelper {
         where: 'id = ?',
         whereArgs: [transactionId],
       );
+      if (rowsAffected > 0) {
+        _triggerAutoSync(); // Trigger auto sync after data change
+      }
+      return rowsAffected;
     } catch (e) {
       print("Error updating local transaction status: $e");
       throw Exception("Gagal update status transaksi lokal.");
@@ -764,10 +793,19 @@ class DatabaseHelper {
     final db = await database;
     String whereClause = 'id_pengguna = ? AND is_deleted = 0'; // <-- Filter
     List<dynamic> whereArgs = [userId];
+
     // Filter tanggal
     if (startDate != null && endDate != null) {
-      /* ... logika sama ... */
-    } else if (startDate != null) {/* ... logika sama ... */}
+      whereClause += ' AND tanggal_transaksi >= ? AND tanggal_transaksi <= ?';
+      whereArgs
+          .addAll([startDate.toIso8601String(), endDate.toIso8601String()]);
+    } else if (startDate != null) {
+      whereClause += ' AND tanggal_transaksi >= ?';
+      whereArgs.add(startDate.toIso8601String());
+    } else if (endDate != null) {
+      whereClause += ' AND tanggal_transaksi <= ?';
+      whereArgs.add(endDate.toIso8601String());
+    }
 
     final List<Map<String, dynamic>> maps = await db.query('transactions',
         where: whereClause,
@@ -1088,8 +1126,12 @@ class DatabaseHelper {
       }
     }
 
-    void batchDelete(String table, List<int> ids) {
+    void batchDelete(String table, List ids) {
       if (ids.isNotEmpty) {
+        // Convert dynamic list to int list
+        final List<int> intIds =
+            ids.map((id) => id is int ? id : int.parse(id.toString())).toList();
+
         // Hapus gambar dulu untuk produk sebelum delete record
         if (table == 'products') {
           // Kita perlu query path gambar SEBELUM dimasukkan ke batch delete
@@ -1099,30 +1141,34 @@ class DatabaseHelper {
               "Physical deletion of products marked 'deleted' needs image handling outside batch or revised logic.");
           // Untuk sementara, hanya delete record:
           batch.delete(table,
-              where: 'id IN (${List.filled(ids.length, '?').join(',')})',
-              whereArgs: ids);
-          deleteCount += ids.length;
+              where: 'id IN (${List.filled(intIds.length, '?').join(',')})',
+              whereArgs: intIds);
+          deleteCount += intIds.length;
         } else {
           batch.delete(table,
-              where: 'id IN (${List.filled(ids.length, '?').join(',')})',
-              whereArgs: ids);
-          deleteCount += ids.length;
+              where: 'id IN (${List.filled(intIds.length, '?').join(',')})',
+              whereArgs: intIds);
+          deleteCount += intIds.length;
         }
       }
     }
 
-    // Terapkan batch
-    batchUpdateStatus('products', uploadedChanges['newProducts'] ?? []);
-    batchUpdateStatus('products', uploadedChanges['updatedProducts'] ?? []);
-    batchDelete('products', uploadedChanges['deletedProductIds'] ?? []);
+    // Extract data from nested structure
+    final products = uploadedChanges['products'] ?? {};
+    final customers = uploadedChanges['customers'] ?? {};
+    final transactions = uploadedChanges['transactions'] ?? {};
 
-    batchUpdateStatus('customers', uploadedChanges['newCustomers'] ?? []);
-    batchUpdateStatus('customers', uploadedChanges['updatedCustomers'] ?? []);
-    batchDelete('customers', uploadedChanges['deletedCustomerIds'] ?? []);
+    // Terapkan batch untuk struktur data baru
+    batchUpdateStatus('products', products['new'] ?? []);
+    batchUpdateStatus('products', products['updated'] ?? []);
+    batchDelete('products', products['deleted'] ?? []);
 
-    batchUpdateStatus('transactions', uploadedChanges['newTransactions'] ?? []);
-    // batchUpdateStatus('transactions', uploadedChanges['updatedTransactions'] ?? []); // Jika ada
-    batchDelete('transactions', uploadedChanges['deletedTransactionIds'] ?? []);
+    batchUpdateStatus('customers', customers['new'] ?? []);
+    batchUpdateStatus('customers', customers['updated'] ?? []);
+    batchDelete('customers', customers['deleted'] ?? []);
+
+    batchUpdateStatus('transactions', transactions['new'] ?? []);
+    batchDelete('transactions', transactions['deleted'] ?? []);
 
     try {
       await batch.commit(noResult: true);

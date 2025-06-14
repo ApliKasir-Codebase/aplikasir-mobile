@@ -45,23 +45,6 @@ class _ReportScreenContentState extends State<_ReportScreenContent> {
   final Color _darkTextColor = Colors.black87;
   final Color _greyTextColor = Colors.grey.shade600;
 
-  // Semua state terkait data (_selectedSegment, _selectedDate, statistik, chartData) PINDAH KE PROVIDER
-
-  // initState dan fungsi load data PINDAH KE PROVIDER
-
-  void _showSnackbar(String message, {bool isError = false}) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message, style: GoogleFonts.poppins()),
-        backgroundColor: isError ? Colors.redAccent : Colors.green,
-        duration: const Duration(seconds: 2),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      ),
-    );
-  }
-
   Widget _buildStatCard(
       String title, String value, IconData icon, Color color) {
     return Card(
@@ -202,6 +185,15 @@ class _ReportScreenContentState extends State<_ReportScreenContent> {
         shadowColor: Colors.black26,
         surfaceTintColor: _lightBgColor,
         centerTitle: true,
+        actions: [
+          IconButton(
+            icon: Icon(Icons.download_outlined, color: _primaryColor),
+            onPressed: reportProvider.isLoading
+                ? null
+                : () => reportProvider.generateAndSharePDF(context),
+            tooltip: 'Download Laporan PDF',
+          ),
+        ],
       ),
       backgroundColor: _scaffoldBgColor,
       body: RefreshIndicator(

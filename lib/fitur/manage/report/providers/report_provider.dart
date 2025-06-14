@@ -2,6 +2,13 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart'; // Impor chart
 import 'package:intl/intl.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:path_provider/path_provider.dart';
+import 'dart:io';
+import 'package:share_plus/share_plus.dart';
+import 'package:open_file/open_file.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import 'package:aplikasir_mobile/model/transaction_model.dart';
 import 'package:aplikasir_mobile/helper/db_helper.dart';
@@ -114,33 +121,55 @@ class ReportProvider extends ChangeNotifier {
     DateTime start;
     DateTime end;
 
-    switch (_selectedSegment) {
-      case ReportSegment.day:
-        start = DateTime(_selectedDate.year, _selectedDate.month,
-            _selectedDate.day, 0, 0, 0);
-        end = DateTime(_selectedDate.year, _selectedDate.month,
-            _selectedDate.day, 23, 59, 59, 999);
-        break;
-      case ReportSegment.week:
-        start = DateTime(_selectedWeek!.start.year, _selectedWeek!.start.month,
-            _selectedWeek!.start.day, 0, 0, 0);
-        end = DateTime(_selectedWeek!.end.year, _selectedWeek!.end.month,
-            _selectedWeek!.end.day, 23, 59, 59, 999);
-        break;
-      case ReportSegment.month:
-        start =
-            DateTime(_selectedMonth!.year, _selectedMonth!.month, 1, 0, 0, 0);
-        end = DateTime(_selectedMonth!.year, _selectedMonth!.month + 1, 0, 23,
-            59, 59, 999); // Hari ke-0 bulan berikutnya
-        break;
-      case ReportSegment.all:
-        // Ambil dari transaksi paling awal hingga sekarang
-        // Ini bisa jadi query berat jika data banyak. Pertimbangkan batasan (misal 1 tahun)
-        // Untuk contoh ini, kita batasi 5 tahun
-        start = now.subtract(const Duration(days: 365 * 5));
-        end = DateTime(now.year, now.month, now.day, 23, 59, 59, 999);
-        break;
+    try {
+      switch (_selectedSegment) {
+        case ReportSegment.day:
+          start = DateTime(_selectedDate.year, _selectedDate.month,
+              _selectedDate.day, 0, 0, 0);
+          end = DateTime(_selectedDate.year, _selectedDate.month,
+              _selectedDate.day, 23, 59, 59, 999);
+          break;
+        case ReportSegment.week:
+          if (_selectedWeek != null) {
+            start = DateTime(_selectedWeek!.start.year,
+                _selectedWeek!.start.month, _selectedWeek!.start.day, 0, 0, 0);
+            end = DateTime(_selectedWeek!.end.year, _selectedWeek!.end.month,
+                _selectedWeek!.end.day, 23, 59, 59, 999);
+          } else {
+            // Fallback to current week if _selectedWeek is null
+            start = DateTime(
+                now.year, now.month, now.day - now.weekday + 1, 0, 0, 0);
+            end = DateTime(now.year, now.month, now.day - now.weekday + 7, 23,
+                59, 59, 999);
+          }
+          break;
+        case ReportSegment.month:
+          if (_selectedMonth != null) {
+            start = DateTime(
+                _selectedMonth!.year, _selectedMonth!.month, 1, 0, 0, 0);
+            end = DateTime(_selectedMonth!.year, _selectedMonth!.month + 1, 0,
+                23, 59, 59, 999); // Hari ke-0 bulan berikutnya
+          } else {
+            // Fallback to current month if _selectedMonth is null
+            start = DateTime(now.year, now.month, 1, 0, 0, 0);
+            end = DateTime(now.year, now.month + 1, 0, 23, 59, 59, 999);
+          }
+          break;
+        case ReportSegment.all:
+          // Ambil dari transaksi paling awal hingga sekarang
+          // Ini bisa jadi query berat jika data banyak. Pertimbangkan batasan (misal 1 tahun)
+          // Untuk contoh ini, kita batasi 5 tahun
+          start = now.subtract(const Duration(days: 365 * 5));
+          end = DateTime(now.year, now.month, now.day, 23, 59, 59, 999);
+          break;
+      }
+    } catch (e) {
+      print("Error calculating date range: $e");
+      // Fallback to today if there's any error
+      start = DateTime(now.year, now.month, now.day, 0, 0, 0);
+      end = DateTime(now.year, now.month, now.day, 23, 59, 59, 999);
     }
+
     return DateTimeRange(start: start, end: end);
   }
 
@@ -162,7 +191,6 @@ class ReportProvider extends ChangeNotifier {
     List<FlSpot> spots = [];
     Map<int, String> bottomTitles = {};
     double maxY = 0;
-    final DateFormat dayMonthFormat = DateFormat('d/M');
     final DateFormat monthYearFormat = DateFormat('MMM yy', 'id_ID');
     final DateFormat hourFormat = DateFormat('HH');
 
@@ -170,119 +198,131 @@ class ReportProvider extends ChangeNotifier {
       _salesChartData = [];
       _chartBottomTitles = {};
       _chartMaxY = 10000; // Default jika tidak ada data
-      notifyListeners();
       return;
     }
 
     Map<double, double> aggregatedSales = {};
 
-    switch (_selectedSegment) {
-      case ReportSegment.day:
-        // Agregasi per jam
-        for (var tx in _salesTransactionsForStats) {
-          double hour = tx.tanggalTransaksi.hour.toDouble();
-          aggregatedSales[hour] =
-              (aggregatedSales[hour] ?? 0) + tx.totalBelanja;
-        }
-        for (int i = 0; i < 24; i++) {
-          // Sumbu X dari 0 (00:00) hingga 23 (23:00)
-          double sales = aggregatedSales[i.toDouble()] ?? 0;
-          spots.add(FlSpot(i.toDouble(), sales));
-          if (sales > maxY) maxY = sales;
-          if (i % 4 == 0) {
-            // Tampilkan label jam tiap 4 jam
-            bottomTitles[i] = hourFormat.format(DateTime(0, 0, 0, i));
+    try {
+      switch (_selectedSegment) {
+        case ReportSegment.day:
+          // Agregasi per jam
+          for (var tx in _salesTransactionsForStats) {
+            double hour = tx.tanggalTransaksi.hour.toDouble();
+            aggregatedSales[hour] =
+                (aggregatedSales[hour] ?? 0) + tx.totalBelanja;
           }
-        }
-        break;
-      case ReportSegment.week:
-        // Agregasi per hari dalam seminggu
-        for (var tx in _salesTransactionsForStats) {
-          double dayOfWeek =
-              tx.tanggalTransaksi.weekday.toDouble(); // 1 (Mon) - 7 (Sun)
-          aggregatedSales[dayOfWeek] =
-              (aggregatedSales[dayOfWeek] ?? 0) + tx.totalBelanja;
-        }
-        List<String> weekDayLabels = [
-          'Sen',
-          'Sel',
-          'Rab',
-          'Kam',
-          'Jum',
-          'Sab',
-          'Min'
-        ];
-        for (int i = 1; i <= 7; i++) {
-          double sales = aggregatedSales[i.toDouble()] ?? 0;
-          spots.add(FlSpot(i.toDouble(), sales));
-          if (sales > maxY) maxY = sales;
-          bottomTitles[i] = weekDayLabels[i - 1];
-        }
-        break;
-      case ReportSegment.month:
-        // Agregasi per tanggal dalam sebulan
-        int daysInMonth =
-            DateTime(_selectedMonth!.year, _selectedMonth!.month + 1, 0).day;
-        for (var tx in _salesTransactionsForStats) {
-          double dayOfMonth = tx.tanggalTransaksi.day.toDouble();
-          aggregatedSales[dayOfMonth] =
-              (aggregatedSales[dayOfMonth] ?? 0) + tx.totalBelanja;
-        }
-        for (int i = 1; i <= daysInMonth; i++) {
-          double sales = aggregatedSales[i.toDouble()] ?? 0;
-          spots.add(FlSpot(i.toDouble(), sales));
-          if (sales > maxY) maxY = sales;
-          if (i == 1 || i % 5 == 0 || i == daysInMonth) {
-            // Tampilkan label untuk tanggal tertentu
-            bottomTitles[i] = i.toString();
+          for (int i = 0; i < 24; i++) {
+            // Sumbu X dari 0 (00:00) hingga 23 (23:00)
+            double sales = aggregatedSales[i.toDouble()] ?? 0;
+            spots.add(FlSpot(i.toDouble(), sales));
+            if (sales > maxY) maxY = sales;
+            if (i % 4 == 0) {
+              // Tampilkan label jam tiap 4 jam
+              bottomTitles[i] = hourFormat.format(DateTime(0, 0, 0, i));
+            }
           }
-        }
-        break;
-      case ReportSegment.all:
-        // Agregasi per bulan dalam setahun (misal 12 bulan terakhir)
-        DateTime endDate = DateTime.now();
-        DateTime startDate = DateTime(endDate.year - 1, endDate.month + 1,
-            1); // 12 bulan lalu dari awal bulan depan
-        Map<String, double> monthlySales =
-            {}; // Key: 'YYYY-MM', Value: total sales
-
-        for (var tx in _salesTransactionsForStats) {
-          if (tx.tanggalTransaksi
-                  .isAfter(startDate.subtract(const Duration(days: 1))) &&
-              tx.tanggalTransaksi
-                  .isBefore(endDate.add(const Duration(days: 1)))) {
-            String monthKey = DateFormat('yyyy-MM').format(tx.tanggalTransaksi);
-            monthlySales[monthKey] =
-                (monthlySales[monthKey] ?? 0) + tx.totalBelanja;
+          break;
+        case ReportSegment.week:
+          // Agregasi per hari dalam seminggu
+          for (var tx in _salesTransactionsForStats) {
+            double dayOfWeek =
+                tx.tanggalTransaksi.weekday.toDouble(); // 1 (Mon) - 7 (Sun)
+            aggregatedSales[dayOfWeek] =
+                (aggregatedSales[dayOfWeek] ?? 0) + tx.totalBelanja;
           }
-        }
+          List<String> weekDayLabels = [
+            'Sen',
+            'Sel',
+            'Rab',
+            'Kam',
+            'Jum',
+            'Sab',
+            'Min'
+          ];
+          for (int i = 1; i <= 7; i++) {
+            double sales = aggregatedSales[i.toDouble()] ?? 0;
+            spots.add(FlSpot(i.toDouble(), sales));
+            if (sales > maxY) maxY = sales;
+            bottomTitles[i] = weekDayLabels[i - 1];
+          }
+          break;
+        case ReportSegment.month:
+          // Agregasi per tanggal dalam sebulan
+          if (_selectedMonth != null) {
+            int daysInMonth =
+                DateTime(_selectedMonth!.year, _selectedMonth!.month + 1, 0)
+                    .day;
+            for (var tx in _salesTransactionsForStats) {
+              double dayOfMonth = tx.tanggalTransaksi.day.toDouble();
+              aggregatedSales[dayOfMonth] =
+                  (aggregatedSales[dayOfMonth] ?? 0) + tx.totalBelanja;
+            }
+            for (int i = 1; i <= daysInMonth; i++) {
+              double sales = aggregatedSales[i.toDouble()] ?? 0;
+              spots.add(FlSpot(i.toDouble(), sales));
+              if (sales > maxY) maxY = sales;
+              if (i == 1 || i % 5 == 0 || i == daysInMonth) {
+                // Tampilkan label untuk tanggal tertentu
+                bottomTitles[i] = i.toString();
+              }
+            }
+          }
+          break;
+        case ReportSegment.all:
+          // Agregasi per bulan dalam setahun (misal 12 bulan terakhir)
+          DateTime endDate = DateTime.now();
+          DateTime startDate = DateTime(endDate.year - 1, endDate.month + 1,
+              1); // 12 bulan lalu dari awal bulan depan
+          Map<String, double> monthlySales =
+              {}; // Key: 'YYYY-MM', Value: total sales
 
-        List<String> sortedMonthKeys = monthlySales.keys.toList()..sort();
-        if (sortedMonthKeys.length > 12) {
-          // Batasi hingga 12 bulan terakhir jika datanya banyak
-          sortedMonthKeys =
-              sortedMonthKeys.sublist(sortedMonthKeys.length - 12);
-        }
+          for (var tx in _salesTransactionsForStats) {
+            if (tx.tanggalTransaksi
+                    .isAfter(startDate.subtract(const Duration(days: 1))) &&
+                tx.tanggalTransaksi
+                    .isBefore(endDate.add(const Duration(days: 1)))) {
+              String monthKey =
+                  DateFormat('yyyy-MM').format(tx.tanggalTransaksi);
+              monthlySales[monthKey] =
+                  (monthlySales[monthKey] ?? 0) + tx.totalBelanja;
+            }
+          }
 
-        for (int i = 0; i < sortedMonthKeys.length; i++) {
-          String monthKey = sortedMonthKeys[i];
-          double sales = monthlySales[monthKey] ?? 0;
-          spots.add(
-              FlSpot(i.toDouble(), sales)); // Sumbu X dari 0 hingga N-1 bulan
-          if (sales > maxY) maxY = sales;
-          // Label untuk sumbu X: Nama bulan
-          try {
-            DateTime dateFromKey = DateFormat('yyyy-MM').parse(monthKey);
-            bottomTitles[i] = monthYearFormat.format(dateFromKey);
-          } catch (_) {}
-        }
-        break;
+          List<String> sortedMonthKeys = monthlySales.keys.toList()..sort();
+          if (sortedMonthKeys.length > 12) {
+            // Batasi hingga 12 bulan terakhir jika datanya banyak
+            sortedMonthKeys =
+                sortedMonthKeys.sublist(sortedMonthKeys.length - 12);
+          }
+
+          for (int i = 0; i < sortedMonthKeys.length; i++) {
+            String monthKey = sortedMonthKeys[i];
+            double sales = monthlySales[monthKey] ?? 0;
+            spots.add(
+                FlSpot(i.toDouble(), sales)); // Sumbu X dari 0 hingga N-1 bulan
+            if (sales > maxY) maxY = sales;
+            // Label untuk sumbu X: Nama bulan
+            try {
+              DateTime dateFromKey = DateFormat('yyyy-MM').parse(monthKey);
+              bottomTitles[i] = monthYearFormat.format(dateFromKey);
+            } catch (e) {
+              print("Error parsing month key: $monthKey, error: $e");
+            }
+          }
+          break;
+      }
+    } catch (e) {
+      print("Error preparing chart data: $e");
+      // Set default values on error
+      spots = [FlSpot(0, 0)];
+      bottomTitles = {0: 'Error'};
+      maxY = 10000;
     }
 
     _salesChartData = spots;
     _chartBottomTitles = bottomTitles;
     _chartMaxY = maxY == 0 ? 10000 : (maxY * 1.2); // Beri sedikit padding atas
-    // notifyListeners(); // Sudah dipanggil di loadAndProcessReports
   }
 
   // --- Update State Filter ---
@@ -294,71 +334,604 @@ class ReportProvider extends ChangeNotifier {
   }
 
   Future<void> setSelectedDate(BuildContext context) async {
-    final DateTime? picked = await showDatePicker(
-      context: context,
-      initialDate: _selectedDate,
-      firstDate: DateTime(2020),
-      lastDate: DateTime.now(),
-      locale: const Locale('id', 'ID'),
-    );
-    if (picked != null && picked != _selectedDate) {
-      _selectedDate = picked;
-      loadAndProcessReports();
+    try {
+      final DateTime? picked = await showDatePicker(
+        context: context,
+        initialDate: _selectedDate,
+        firstDate: DateTime(2020),
+        lastDate: DateTime.now(),
+        locale: const Locale('id', 'ID'),
+        builder: (BuildContext context, Widget? child) {
+          return Theme(
+            data: Theme.of(context).copyWith(
+              colorScheme: ColorScheme.light(
+                primary: Colors.blue.shade700,
+                onPrimary: Colors.white,
+              ),
+            ),
+            child: child!,
+          );
+        },
+      );
+      if (picked != null && picked != _selectedDate) {
+        _selectedDate = picked;
+        loadAndProcessReports();
+      }
+    } catch (e) {
+      print("Error selecting date: $e");
     }
   }
 
   Future<void> setSelectedWeek(BuildContext context) async {
-    final DateTimeRange? picked = await showDateRangePicker(
-      context: context,
-      initialDateRange: _selectedWeek,
-      firstDate: DateTime(2020),
-      lastDate: DateTime.now().add(const Duration(days: 7)), // Sedikit ke depan
-      locale: const Locale('id', 'ID'),
-      helpText: 'Pilih Rentang Minggu',
-      // builder: (context, child) { // Anda bisa styling DateRangePicker
-      //   return Theme(
-      //     data: ThemeData.light().copyWith(
-      //       colorScheme: ColorScheme.light(primary: _primaryColor),
-      //     ),
-      //     child: child!,
-      //   );
-      // }
-    );
-    if (picked != null && picked != _selectedWeek) {
-      // Validasi agar range tidak lebih dari 7 hari jika ingin strictly per minggu
-      if (picked.duration.inDays > 7) {
-        // Ambil 7 hari dari tanggal mulai
-        _selectedWeek = DateTimeRange(
-            start: picked.start,
-            end: picked.start.add(const Duration(days: 6)));
-      } else {
-        _selectedWeek = picked;
+    try {
+      final DateTimeRange? picked = await showDateRangePicker(
+        context: context,
+        initialDateRange: _selectedWeek,
+        firstDate: DateTime(2020),
+        lastDate: DateTime.now().add(const Duration(days: 7)),
+        locale: const Locale('id', 'ID'),
+        helpText: 'Pilih Rentang Minggu',
+        builder: (BuildContext context, Widget? child) {
+          return Theme(
+            data: Theme.of(context).copyWith(
+              colorScheme: ColorScheme.light(
+                primary: Colors.blue.shade700,
+                onPrimary: Colors.white,
+              ),
+            ),
+            child: child!,
+          );
+        },
+      );
+      if (picked != null && picked != _selectedWeek) {
+        // Validasi agar range tidak lebih dari 7 hari jika ingin strictly per minggu
+        if (picked.duration.inDays > 7) {
+          // Ambil 7 hari dari tanggal mulai
+          _selectedWeek = DateTimeRange(
+              start: picked.start,
+              end: picked.start.add(const Duration(days: 6)));
+        } else {
+          _selectedWeek = picked;
+        }
+        loadAndProcessReports();
       }
-      loadAndProcessReports();
+    } catch (e) {
+      print("Error selecting week: $e");
     }
   }
 
   Future<void> setSelectedMonth(BuildContext context) async {
-    final DateTime initial = _selectedMonth ?? DateTime.now();
-    final DateTime? picked = await showDatePicker(
-      context: context,
-      initialDate: DateTime(initial.year, initial.month),
-      firstDate: DateTime(2020),
-      lastDate: DateTime.now(),
-      initialEntryMode:
-          DatePickerEntryMode.calendarOnly, // Agar langsung kalender
-      initialDatePickerMode:
-          DatePickerMode.day, // Mulai dari pilih hari, lalu bisa ke bulan/tahun
-      locale: const Locale('id', 'ID'),
-      // Untuk picker bulan murni, package `month_picker_dialog` lebih baik
-    );
+    try {
+      final DateTime initial = _selectedMonth ?? DateTime.now();
+      final DateTime? picked = await showDatePicker(
+        context: context,
+        initialDate: DateTime(initial.year, initial.month),
+        firstDate: DateTime(2020),
+        lastDate: DateTime.now(),
+        initialEntryMode: DatePickerEntryMode.calendarOnly,
+        initialDatePickerMode: DatePickerMode.year, // Start from year selection
+        locale: const Locale('id', 'ID'),
+        builder: (BuildContext context, Widget? child) {
+          return Theme(
+            data: Theme.of(context).copyWith(
+              colorScheme: ColorScheme.light(
+                primary: Colors.blue.shade700,
+                onPrimary: Colors.white,
+              ),
+            ),
+            child: child!,
+          );
+        },
+      );
 
-    if (picked != null) {
-      final pickedMonth = DateTime(picked.year, picked.month);
-      if (pickedMonth != _selectedMonth) {
-        _selectedMonth = pickedMonth;
-        loadAndProcessReports();
+      if (picked != null) {
+        final pickedMonth = DateTime(picked.year, picked.month);
+        if (pickedMonth != _selectedMonth) {
+          _selectedMonth = pickedMonth;
+          loadAndProcessReports();
+        }
+      }
+    } catch (e) {
+      print("Error selecting month: $e");
+    }
+  }
+
+  // PDF Generation Methods
+  Future<void> generateAndSharePDF(BuildContext context) async {
+    try {
+      // Show loading indicator
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Membuat PDF...'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+
+      // Request storage permissions
+      bool hasPermission = await _requestStoragePermissions();
+      if (!hasPermission) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Izin penyimpanan diperlukan untuk menyimpan PDF'),
+              backgroundColor: Colors.red,
+              duration: Duration(seconds: 4),
+            ),
+          );
+        }
+        return;
+      }
+
+      final pdf = await _generatePDF();
+      final bytes = await pdf.save();
+
+      // Create ApliKasir folder in external storage
+      final file = await _saveToExternalStorage(bytes);
+
+      if (context.mounted) {
+        // Show success message with options
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('PDF berhasil dibuat!'),
+                const SizedBox(height: 4),
+                Text(
+                  'Tersimpan di: ${file.path}',
+                  style: const TextStyle(fontSize: 12, color: Colors.white70),
+                ),
+              ],
+            ),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 8),
+            action: SnackBarAction(
+              label: 'BUKA',
+              textColor: Colors.white,
+              onPressed: () => _openFile(file),
+            ),
+          ),
+        );
+
+        // Also show a dialog with more options
+        _showPDFSuccessDialog(context, file);
+      }
+    } catch (e) {
+      print('Error generating PDF: $e');
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal membuat PDF: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
+          ),
+        );
       }
     }
+  }
+
+  Future<bool> _requestStoragePermissions() async {
+    try {
+      // For Android 11+ (API 30+), we need to request special permission
+      if (await Permission.manageExternalStorage.isGranted) {
+        return true;
+      }
+
+      // Request storage permission
+      var status = await Permission.storage.request();
+      if (status.isGranted) {
+        return true;
+      }
+
+      // For Android 11+, request manage external storage if regular storage permission is denied
+      if (await Permission.manageExternalStorage.request().isGranted) {
+        return true;
+      }
+
+      return false;
+    } catch (e) {
+      print('Error requesting storage permissions: $e');
+      return false;
+    }
+  }
+
+  Future<File> _saveToExternalStorage(List<int> bytes) async {
+    try {
+      // Try to get external storage directory (app-specific)
+      Directory? externalDir;
+
+      try {
+        // Primary: Try to get external storage directory
+        externalDir = await getExternalStorageDirectory();
+      } catch (e) {
+        print('Error getting external storage directory: $e');
+      }
+
+      // Fallback: Try to get application documents directory
+      if (externalDir == null) {
+        try {
+          externalDir = await getApplicationDocumentsDirectory();
+        } catch (e) {
+          print('Error getting application documents directory: $e');
+        }
+      }
+
+      // Final fallback: Try to get temporary directory
+      if (externalDir == null) {
+        try {
+          externalDir = await getTemporaryDirectory();
+        } catch (e) {
+          print('Error getting temporary directory: $e');
+          throw Exception('Cannot access any storage directory');
+        }
+      }
+
+      // Create ApliKasir folder in the chosen directory
+      final aplikasirDir = Directory('${externalDir.path}/ApliKasir');
+      if (!await aplikasirDir.exists()) {
+        await aplikasirDir.create(recursive: true);
+      }
+
+      // Create PDF file
+      final fileName = _getPDFFilename();
+      final file = File('${aplikasirDir.path}/$fileName');
+
+      // Write PDF to file
+      await file.writeAsBytes(bytes);
+
+      print('PDF saved to: ${file.path}');
+      return file;
+    } catch (e) {
+      print('Error saving to storage: $e');
+      // Final fallback to app documents directory
+      final directory = await getApplicationDocumentsDirectory();
+      final fileName = _getPDFFilename();
+      final file = File('${directory.path}/$fileName');
+      await file.writeAsBytes(bytes);
+      return file;
+    }
+  }
+
+  Future<void> _shareFile(File file) async {
+    try {
+      await Share.shareXFiles(
+        [XFile(file.path)],
+        text: 'Laporan Penjualan ApliKasir',
+        subject: 'Laporan Penjualan - ${_getPeriodText()}',
+      );
+    } catch (e) {
+      print('Error sharing PDF: $e');
+      // Fallback: just show the file path
+      print('PDF saved at: ${file.path}');
+    }
+  }
+
+  Future<void> _openFile(File file) async {
+    try {
+      // Check if file exists
+      if (!await file.exists()) {
+        print('File does not exist: ${file.path}');
+        return;
+      }
+
+      final result = await OpenFile.open(file.path);
+      print('OpenFile result: ${result.type} - ${result.message}');
+
+      if (result.type != ResultType.done) {
+        print('Error opening PDF: ${result.message}');
+        // If opening fails, try alternative method
+        await _openFileAlternative(file);
+      }
+    } catch (e) {
+      print('Error opening PDF: $e');
+      await _openFileAlternative(file);
+    }
+  }
+
+  Future<void> _openFileAlternative(File file) async {
+    try {
+      // Alternative: Share the file which will show apps that can open it
+      await Share.shareXFiles(
+        [XFile(file.path)],
+        text: 'Buka PDF dengan aplikasi pilihan Anda',
+        subject: 'Laporan PDF ApliKasir',
+      );
+    } catch (e) {
+      print('Alternative open method also failed: $e');
+    }
+  }
+
+  void _showPDFSuccessDialog(BuildContext context, File file) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('PDF Berhasil Dibuat'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Laporan PDF telah berhasil dibuat.'),
+              const SizedBox(height: 8),
+              Text(
+                'Lokasi: ${file.path}',
+                style: const TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Tutup'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _openFile(file);
+              },
+              child: const Text('Buka'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _shareFile(file);
+              },
+              child: const Text('Bagikan'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<pw.Document> _generatePDF() async {
+    final pdf = pw.Document();
+    final DateFormat dateFormatter = DateFormat('dd MMMM yyyy', 'id_ID');
+    final NumberFormat currencyFormatter = NumberFormat.currency(
+      locale: 'id_ID',
+      symbol: 'Rp ',
+      decimalDigits: 0,
+    );
+
+    String periodText = _getPeriodText();
+
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(20),
+        build: (pw.Context context) {
+          return [
+            // Header
+            pw.Container(
+              alignment: pw.Alignment.center,
+              child: pw.Column(
+                children: [
+                  pw.Text(
+                    'LAPORAN PENJUALAN',
+                    style: pw.TextStyle(
+                      fontSize: 20,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                  pw.SizedBox(height: 5),
+                  pw.Text(
+                    periodText,
+                    style: pw.TextStyle(fontSize: 14),
+                  ),
+                  pw.SizedBox(height: 5),
+                  pw.Text(
+                    'Dibuat pada: ${dateFormatter.format(DateTime.now())}',
+                    style: pw.TextStyle(fontSize: 12, color: PdfColors.grey600),
+                  ),
+                ],
+              ),
+            ),
+
+            pw.SizedBox(height: 30),
+
+            // Statistics Summary
+            pw.Container(
+              padding: const pw.EdgeInsets.all(15),
+              decoration: pw.BoxDecoration(
+                border: pw.Border.all(color: PdfColors.grey300),
+                borderRadius: pw.BorderRadius.circular(8),
+              ),
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text(
+                    'RINGKASAN STATISTIK',
+                    style: pw.TextStyle(
+                      fontSize: 16,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                  pw.SizedBox(height: 15),
+                  pw.Row(
+                    mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                    children: [
+                      pw.Expanded(
+                        child: _buildStatItem(
+                            'Total Penjualan', '$_totalSalesCount transaksi'),
+                      ),
+                      pw.Expanded(
+                        child: _buildStatItem('Total Pendapatan',
+                            currencyFormatter.format(_totalRevenue)),
+                      ),
+                      pw.Expanded(
+                        child: _buildStatItem('Total Keuntungan',
+                            currencyFormatter.format(_totalProfit)),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+
+            pw.SizedBox(height: 30),
+
+            // Transaction List
+            pw.Text(
+              'DAFTAR TRANSAKSI',
+              style: pw.TextStyle(
+                fontSize: 16,
+                fontWeight: pw.FontWeight.bold,
+              ),
+            ),
+
+            pw.SizedBox(height: 15),
+
+            if (_salesTransactionsForStats.isEmpty)
+              pw.Container(
+                alignment: pw.Alignment.center,
+                padding: const pw.EdgeInsets.all(20),
+                child: pw.Text(
+                  'Tidak ada transaksi pada periode ini',
+                  style: pw.TextStyle(fontSize: 12, color: PdfColors.grey600),
+                ),
+              )
+            else
+              pw.Table(
+                border: pw.TableBorder.all(color: PdfColors.grey300),
+                columnWidths: const {
+                  0: pw.FlexColumnWidth(2),
+                  1: pw.FlexColumnWidth(1.5),
+                  2: pw.FlexColumnWidth(1.5),
+                  3: pw.FlexColumnWidth(1.5),
+                },
+                children: [
+                  // Header
+                  pw.TableRow(
+                    decoration:
+                        const pw.BoxDecoration(color: PdfColors.grey200),
+                    children: [
+                      _buildTableCell('Tanggal & Waktu', isHeader: true),
+                      _buildTableCell('Metode', isHeader: true),
+                      _buildTableCell('Total', isHeader: true),
+                      _buildTableCell('Keuntungan', isHeader: true),
+                    ],
+                  ),
+                  // Data rows
+                  ..._salesTransactionsForStats.take(50).map((transaction) {
+                    final profit =
+                        transaction.totalBelanja - transaction.totalModal;
+                    return pw.TableRow(
+                      children: [
+                        _buildTableCell(DateFormat('dd/MM/yyyy HH:mm')
+                            .format(transaction.tanggalTransaksi)),
+                        _buildTableCell(transaction.metodePembayaran),
+                        _buildTableCell(
+                            currencyFormatter.format(transaction.totalBelanja)),
+                        _buildTableCell(currencyFormatter.format(profit)),
+                      ],
+                    );
+                  }).toList(),
+                ],
+              ),
+
+            if (_salesTransactionsForStats.length > 50)
+              pw.Container(
+                margin: const pw.EdgeInsets.only(top: 10),
+                child: pw.Text(
+                  'Menampilkan 50 transaksi pertama dari ${_salesTransactionsForStats.length} total transaksi',
+                  style: pw.TextStyle(fontSize: 10, color: PdfColors.grey600),
+                ),
+              ),
+          ];
+        },
+      ),
+    );
+
+    return pdf;
+  }
+
+  pw.Widget _buildStatItem(String label, String value) {
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Text(
+          label,
+          style: pw.TextStyle(
+            fontSize: 12,
+            color: PdfColors.grey600,
+          ),
+        ),
+        pw.SizedBox(height: 5),
+        pw.Text(
+          value,
+          style: pw.TextStyle(
+            fontSize: 14,
+            fontWeight: pw.FontWeight.bold,
+          ),
+        ),
+      ],
+    );
+  }
+
+  pw.Widget _buildTableCell(String text, {bool isHeader = false}) {
+    return pw.Container(
+      padding: const pw.EdgeInsets.all(8),
+      child: pw.Text(
+        text,
+        style: pw.TextStyle(
+          fontSize: isHeader ? 12 : 10,
+          fontWeight: isHeader ? pw.FontWeight.bold : pw.FontWeight.normal,
+        ),
+      ),
+    );
+  }
+
+  String _getPeriodText() {
+    final DateFormat dateFormatter = DateFormat('dd MMMM yyyy', 'id_ID');
+    final DateFormat monthFormatter = DateFormat('MMMM yyyy', 'id_ID');
+
+    switch (_selectedSegment) {
+      case ReportSegment.day:
+        return 'Periode: ${dateFormatter.format(_selectedDate)}';
+      case ReportSegment.week:
+        if (_selectedWeek != null) {
+          return 'Periode: ${dateFormatter.format(_selectedWeek!.start)} - ${dateFormatter.format(_selectedWeek!.end)}';
+        }
+        return 'Periode: Mingguan';
+      case ReportSegment.month:
+        if (_selectedMonth != null) {
+          return 'Periode: ${monthFormatter.format(_selectedMonth!)}';
+        }
+        return 'Periode: Bulanan';
+      case ReportSegment.all:
+        return 'Periode: Semua Waktu';
+    }
+  }
+
+  String _getPDFFilename() {
+    final DateFormat fileFormatter = DateFormat('yyyy-MM-dd');
+    String period = '';
+
+    switch (_selectedSegment) {
+      case ReportSegment.day:
+        period = fileFormatter.format(_selectedDate);
+        break;
+      case ReportSegment.week:
+        if (_selectedWeek != null) {
+          period =
+              '${fileFormatter.format(_selectedWeek!.start)}_to_${fileFormatter.format(_selectedWeek!.end)}';
+        } else {
+          period = 'mingguan';
+        }
+        break;
+      case ReportSegment.month:
+        if (_selectedMonth != null) {
+          period = DateFormat('yyyy-MM').format(_selectedMonth!);
+        } else {
+          period = 'bulanan';
+        }
+        break;
+      case ReportSegment.all:
+        period = 'semua_waktu';
+        break;
+    }
+
+    return 'laporan_penjualan_$period.pdf';
   }
 }
